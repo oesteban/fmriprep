@@ -62,7 +62,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 LOGGER = logging.getLogger('workflow')
 
 
-def init_func_preproc_wf(bold_file, ignore, freesurfer,
+def init_func_preproc_wf(bold_file, ignore, dismiss_t1w, freesurfer,
                          bold2t1w_dof, reportlets_dir,
                          output_spaces, template, output_dir, omp_nthreads,
                          fmap_bspline, fmap_demean, use_syn, force_syn,
@@ -301,6 +301,7 @@ def init_func_preproc_wf(bold_file, ignore, freesurfer,
     # mean BOLD registration to T1w
     bold_reg_wf = init_bold_reg_wf(name='bold_reg_wf',
                                    freesurfer=freesurfer,
+                                   dismiss_t1w=dismiss_t1w,
                                    bold2t1w_dof=bold2t1w_dof,
                                    bold_file_size_gb=bold_file_size_gb,
                                    omp_nthreads=omp_nthreads,
@@ -316,58 +317,150 @@ def init_func_preproc_wf(bold_file, ignore, freesurfer,
         name='bold_confounds_wf')
     bold_confounds_wf.get_node('inputnode').inputs.t1_transform_flags = [False]
 
-    workflow.connect([
-        (inputnode, bold_reference_wf, [('bold_file', 'inputnode.bold_file')]),
-        (bold_reference_wf, bold_hmc_wf, [
-            ('outputnode.raw_ref_image', 'inputnode.raw_ref_image')]),
-        (inputnode, bold_reg_wf, [('bold_file', 'inputnode.name_source'),
-                                  ('t1_preproc', 'inputnode.t1_preproc'),
-                                  ('t1_brain', 'inputnode.t1_brain'),
-                                  ('t1_mask', 'inputnode.t1_mask'),
-                                  ('t1_seg', 'inputnode.t1_seg'),
-                                  # Undefined if --no-freesurfer, but this is safe
-                                  ('subjects_dir', 'inputnode.subjects_dir'),
-                                  ('subject_id', 'inputnode.subject_id'),
-                                  ('fs_2_t1_transform', 'inputnode.fs_2_t1_transform')
-                                  ]),
-        (inputnode, bold_confounds_wf, [('t1_tpms', 'inputnode.t1_tpms'),
-                                        ('t1_mask', 'inputnode.t1_mask')]),
-        (bold_hmc_wf, bold_reg_wf, [('outputnode.bold_split', 'inputnode.bold_split'),
-                                    ('outputnode.xforms', 'inputnode.hmc_xforms')]),
-        (bold_hmc_wf, bold_confounds_wf, [('outputnode.movpar_file', 'inputnode.movpar_file')]),
-        (bold_reg_wf, bold_confounds_wf, [
-            ('outputnode.bold_t1', 'inputnode.bold_t1'),
-            ('outputnode.bold_mask_t1', 'inputnode.bold_mask_t1')]),
-        (bold_reference_wf, func_reports_wf, [
-            ('outputnode.validation_report', 'inputnode.validation_report')]),
-        (bold_reg_wf, func_reports_wf, [
-            ('outputnode.out_report', 'inputnode.bold_reg_report'),
-        ]),
-        (bold_confounds_wf, outputnode, [
-            ('outputnode.confounds_file', 'confounds'),
-            ('outputnode.aroma_noise_ics', 'aroma_noise_ics'),
-            ('outputnode.melodic_mix', 'melodic_mix'),
-            ('outputnode.nonaggr_denoised_file', 'nonaggr_denoised_file'),
-        ]),
-        (bold_reg_wf, outputnode, [('outputnode.bold_t1', 'bold_t1'),
-                                   ('outputnode.bold_mask_t1', 'bold_mask_t1')]),
-        (bold_confounds_wf, func_reports_wf, [
-            ('outputnode.acompcor_report', 'inputnode.acompcor_report'),
-            ('outputnode.tcompcor_report', 'inputnode.tcompcor_report'),
-            ('outputnode.ica_aroma_report', 'inputnode.ica_aroma_report')]),
-        (bold_confounds_wf, summary, [('outputnode.confounds_list', 'confounds')]),
-        (summary, func_reports_wf, [('out_report', 'inputnode.summary_report')]),
-    ])
-
-    # bool('TooShort') == True, so check True explicitly
-    if run_stc is True:
+    
+    # connect up the workflows that don't require T1 images
+    if dismiss_t1w:
         workflow.connect([
-            (bold_reference_wf, bold_stc_wf, [('outputnode.bold_file', 'inputnode.bold_file'),
-                                              ('outputnode.skip_vols', 'inputnode.skip_vols')]),
-            (bold_stc_wf, bold_hmc_wf, [('outputnode.stc_file', 'inputnode.bold_file')])])
+            (inputnode, bold_reference_wf, [('bold_file', 'inputnode.bold_file')]),
+            (bold_reference_wf, bold_hmc_wf, [('outputnode.raw_ref_image', 'inputnode.raw_ref_image')]),
+            (bold_reference_wf, func_reports_wf, [('outputnode.validation_report', 'inputnode.validation_report')])])
+            
+         # bool('TooShort') == True, so check True explicitly
+        if run_stc is True:
+            workflow.connect([(bold_reference_wf, bold_stc_wf, [('outputnode.bold_file', 'inputnode.bold_file'),
+                                               ('outputnode.skip_vols', 'inputnode.skip_vols')]),(bold_stc_wf, bold_hmc_wf, [('outputnode.stc_file', 'inputnode.bold_file')])])
+        else:
+            workflow.connect([
+                 (bold_reference_wf, bold_hmc_wf, [('outputnode.bold_file', 'inputnode.bold_file')])])
+        
+        nonlinear_sdc_wf = sdc_unwarp_wf = None
+         
+        if use_syn:
+            nonlinear_sdc_wf = init_nonlinear_sdc_wf(
+                bold_file=bold_file, layout=layout, freesurfer=freesurfer, bold2t1w_dof=bold2t1w_dof,
+                template=template, omp_nthreads=omp_nthreads)
+
+            workflow.connect([
+                (inputnode, nonlinear_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('subjects_dir', 'inputnode.subjects_dir'),
+                    ('subject_id', 'inputnode.subject_id')]),
+                (bold_reference_wf, nonlinear_sdc_wf, [
+                    ('outputnode.ref_image_brain', 'inputnode.bold_ref')]),
+                (nonlinear_sdc_wf, func_reports_wf, [
+                    ('outputnode.out_warp_report', 'inputnode.syn_sdc_report')]),
+            ])
+
+            # XXX Eliminate branch when forcing isn't an option
+            if not fmaps:
+                LOGGER.warn('No fieldmaps found or they were ignored. Using EXPERIMENTAL '
+                            'nonlinear susceptibility correction for dataset %s.', bold_file)
+                summary.inputs.distortion_correction = 'SyN'
+                workflow.connect([
+                    (nonlinear_sdc_wf, func_reports_wf, [
+                        ('outputnode.out_mask_report', 'inputnode.bold_mask_report')]),
+                    (nonlinear_sdc_wf, bold_reg_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
+                        ('outputnode.out_reference_brain', 'inputnode.ref_bold_brain'),
+                        ('outputnode.out_mask', 'inputnode.ref_bold_mask')]),
+                ])
+            
+            if 'template' in output_spaces:
+                # Apply transforms in 1 shot
+                # Only use uncompressed output if AROMA is to be run
+                bold_mni_trans_wf = init_bold_mni_trans_wf(
+                    template=template,
+                    bold_file_size_gb=bold_file_size_gb,
+                    omp_nthreads=omp_nthreads,
+                    output_grid_ref=output_grid_ref,
+                    use_compression=not (low_mem and use_aroma),
+                    use_fieldwarp=(fmaps is not None or use_syn),
+                    name='bold_mni_trans_wf'
+                )
+
+            workflow.connect([
+                (inputnode, bold_mni_trans_wf, [
+                    ('bold_file', 'inputnode.name_source'),
+                    ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
+                (bold_hmc_wf, bold_mni_trans_wf, [
+                    ('outputnode.bold_split', 'inputnode.bold_split'),
+                    ('outputnode.xforms', 'inputnode.hmc_xforms')]),
+                (bold_mni_trans_wf, outputnode, [('outputnode.bold_mni', 'bold_mni'),
+                                                 ('outputnode.bold_mask_mni', 'bold_mask_mni')]),
+            ])
+
+            if fmaps:
+                workflow.connect([
+                    (sdc_unwarp_wf, bold_mni_trans_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
+                        ('outputnode.out_mask', 'inputnode.bold_mask')]),
+                ])
+   
+            elif use_syn:
+                workflow.connect([
+                    (nonlinear_sdc_wf, bold_mni_trans_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
+                        ('outputnode.out_mask', 'inputnode.bold_mask')]),
+                ])
+
+        return workflow
+ 
+    
+    # connect up the rest
     else:
         workflow.connect([
-            (bold_reference_wf, bold_hmc_wf, [('outputnode.bold_file', 'inputnode.bold_file')])])
+            (inputnode, bold_reference_wf, [('bold_file', 'inputnode.bold_file')]),
+            (bold_reference_wf, bold_hmc_wf, [('outputnode.raw_ref_image', 'inputnode.raw_ref_image')]),
+            (inputnode, bold_reg_wf, [('bold_file', 'inputnode.name_source'),
+                                      ('t1_preproc', 'inputnode.t1_preproc'),
+                                      ('t1_brain', 'inputnode.t1_brain'),
+                                      ('t1_mask', 'inputnode.t1_mask'),
+                                      ('t1_seg', 'inputnode.t1_seg'),
+                                      # Undefined if --no-freesurfer, but this is safe
+                                      ('subjects_dir', 'inputnode.subjects_dir'),
+                                      ('subject_id', 'inputnode.subject_id'),
+                                      ('fs_2_t1_transform', 'inputnode.fs_2_t1_transform')
+                                      ]),
+            (inputnode, bold_confounds_wf, [('t1_tpms', 'inputnode.t1_tpms'),
+                                            ('t1_mask', 'inputnode.t1_mask')]),
+            (bold_hmc_wf, bold_reg_wf, [('outputnode.bold_split', 'inputnode.bold_split'),
+                                        ('outputnode.xforms', 'inputnode.hmc_xforms')]),
+            (bold_hmc_wf, bold_confounds_wf, [('outputnode.movpar_file', 'inputnode.movpar_file')]),
+            (bold_reg_wf, bold_confounds_wf, [
+                ('outputnode.bold_t1', 'inputnode.bold_t1'),
+                ('outputnode.bold_mask_t1', 'inputnode.bold_mask_t1')]),
+            (bold_reference_wf, func_reports_wf, [
+                ('outputnode.validation_report', 'inputnode.validation_report')]),
+            (bold_reg_wf, func_reports_wf, [
+                ('outputnode.out_report', 'inputnode.bold_reg_report'),
+            ]),
+            (bold_confounds_wf, outputnode, [
+                ('outputnode.confounds_file', 'confounds'),
+                ('outputnode.aroma_noise_ics', 'aroma_noise_ics'),
+                ('outputnode.melodic_mix', 'melodic_mix'),
+                ('outputnode.nonaggr_denoised_file', 'nonaggr_denoised_file'),
+            ]),
+            (bold_reg_wf, outputnode, [('outputnode.bold_t1', 'bold_t1'),
+                                       ('outputnode.bold_mask_t1', 'bold_mask_t1')]),
+            (bold_confounds_wf, func_reports_wf, [
+                ('outputnode.acompcor_report', 'inputnode.acompcor_report'),
+                ('outputnode.tcompcor_report', 'inputnode.tcompcor_report'),
+                ('outputnode.ica_aroma_report', 'inputnode.ica_aroma_report')]),
+            (bold_confounds_wf, summary, [('outputnode.confounds_list', 'confounds')]),
+            (summary, func_reports_wf, [('out_report', 'inputnode.summary_report')]),
+        ])
+
+        # bool('TooShort') == True, so check True explicitly
+        if run_stc is True:
+            workflow.connect([
+                (bold_reference_wf, bold_stc_wf, [('outputnode.bold_file', 'inputnode.bold_file'),
+                                                  ('outputnode.skip_vols', 'inputnode.skip_vols')]),
+                (bold_stc_wf, bold_hmc_wf, [('outputnode.stc_file', 'inputnode.bold_file')])])
+        else:
+            workflow.connect([
+                (bold_reference_wf, bold_hmc_wf, [('outputnode.bold_file', 'inputnode.bold_file')])])
 
     # Cases:
     # fmaps | use_syn | force_syn  |  ACTION
@@ -380,177 +473,100 @@ def init_func_preproc_wf(bold_file, ignore, freesurfer,
 
     # Predefine to pacify the lintian checks about
     # "could be used before defined" - logic was tested to be sound
-    nonlinear_sdc_wf = sdc_unwarp_wf = None
+        nonlinear_sdc_wf = sdc_unwarp_wf = None
 
-    if fmaps:
-        # In case there are multiple fieldmaps prefer EPI
-        fmaps.sort(key=lambda fmap: {'epi': 0, 'fieldmap': 1, 'phasediff': 2}[fmap['type']])
-        fmap = fmaps[0]
+        if use_syn:
+            nonlinear_sdc_wf = init_nonlinear_sdc_wf(
+                bold_file=bold_file, layout=layout, freesurfer=freesurfer, bold2t1w_dof=bold2t1w_dof,
+                template=template, omp_nthreads=omp_nthreads)
 
-        LOGGER.info('Fieldmap estimation: type "%s" found', fmap['type'])
-        summary.inputs.distortion_correction = fmap['type']
-
-        if fmap['type'] == 'epi':
-            epi_fmaps = [fmap_['epi'] for fmap_ in fmaps if fmap_['type'] == 'epi']
-            sdc_unwarp_wf = init_pepolar_unwarp_wf(fmaps=epi_fmaps,
-                                                   layout=layout,
-                                                   bold_file=bold_file,
-                                                   omp_nthreads=omp_nthreads,
-                                                   name='pepolar_unwarp_wf')
-        else:
-            # Import specific workflows here, so we don't brake everything with one
-            # unused workflow.
-            from .fieldmap import init_fmap_estimator_wf, init_sdc_unwarp_wf
-            fmap_estimator_wf = init_fmap_estimator_wf(fmap_bids=fmap,
-                                                       reportlets_dir=reportlets_dir,
-                                                       omp_nthreads=omp_nthreads,
-                                                       fmap_bspline=fmap_bspline)
-            sdc_unwarp_wf = init_sdc_unwarp_wf(reportlets_dir=reportlets_dir,
-                                               omp_nthreads=omp_nthreads,
-                                               fmap_bspline=fmap_bspline,
-                                               fmap_demean=fmap_demean,
-                                               debug=debug,
-                                               name='sdc_unwarp_wf')
             workflow.connect([
-                (fmap_estimator_wf, sdc_unwarp_wf, [
-                    ('outputnode.fmap', 'inputnode.fmap'),
-                    ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-                    ('outputnode.fmap_mask', 'inputnode.fmap_mask')]),
-            ])
-
-        # Connections and workflows common for all types of fieldmaps
-        workflow.connect([
-            (inputnode, sdc_unwarp_wf, [('bold_file', 'inputnode.name_source')]),
-            (bold_reference_wf, sdc_unwarp_wf, [
-                ('outputnode.ref_image', 'inputnode.in_reference'),
-                ('outputnode.ref_image_brain', 'inputnode.in_reference_brain'),
-                ('outputnode.bold_mask', 'inputnode.in_mask')]),
-            (sdc_unwarp_wf, bold_reg_wf, [
-                ('outputnode.out_warp', 'inputnode.fieldwarp'),
-                ('outputnode.out_reference_brain', 'inputnode.ref_bold_brain'),
-                ('outputnode.out_mask', 'inputnode.ref_bold_mask')]),
-            (sdc_unwarp_wf, func_reports_wf, [
-                ('outputnode.out_mask_report', 'inputnode.bold_mask_report')])
-        ])
-
-        # Report on BOLD correction
-        fmap_unwarp_report_wf = init_fmap_unwarp_report_wf(reportlets_dir=reportlets_dir,
-                                                           name='fmap_unwarp_report_wf')
-        workflow.connect([
-            (inputnode, fmap_unwarp_report_wf, [
-                ('t1_seg', 'inputnode.in_seg'),
-                ('bold_file', 'inputnode.name_source')]),
-            (bold_reference_wf, fmap_unwarp_report_wf, [
-                ('outputnode.ref_image', 'inputnode.in_pre')]),
-            (sdc_unwarp_wf, fmap_unwarp_report_wf, [
-                ('outputnode.out_reference', 'inputnode.in_post')]),
-            (bold_reg_wf, fmap_unwarp_report_wf, [
-                ('outputnode.itk_t1_to_bold', 'inputnode.in_xfm')]),
-        ])
-    elif not use_syn:
-        LOGGER.warn('No fieldmaps found or they were ignored, building base workflow '
-                    'for dataset %s.', bold_file)
-        summary.inputs.distortion_correction = 'None'
-        workflow.connect([
-            (bold_reference_wf, func_reports_wf, [
-                ('outputnode.bold_mask_report', 'inputnode.bold_mask_report')]),
-            (bold_reference_wf, bold_reg_wf, [
-                ('outputnode.ref_image_brain', 'inputnode.ref_bold_brain'),
-                ('outputnode.bold_mask', 'inputnode.ref_bold_mask')]),
-        ])
-
-    if use_syn:
-        nonlinear_sdc_wf = init_nonlinear_sdc_wf(
-            bold_file=bold_file, layout=layout, freesurfer=freesurfer, bold2t1w_dof=bold2t1w_dof,
-            template=template, omp_nthreads=omp_nthreads)
-
-        workflow.connect([
-            (inputnode, nonlinear_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_seg', 'inputnode.t1_seg'),
-                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('subjects_dir', 'inputnode.subjects_dir'),
-                ('subject_id', 'inputnode.subject_id')]),
-            (bold_reference_wf, nonlinear_sdc_wf, [
-                ('outputnode.ref_image_brain', 'inputnode.bold_ref')]),
-            (nonlinear_sdc_wf, func_reports_wf, [
-                ('outputnode.out_warp_report', 'inputnode.syn_sdc_report')]),
-        ])
-
-        # XXX Eliminate branch when forcing isn't an option
-        if not fmaps:
-            LOGGER.warn('No fieldmaps found or they were ignored. Using EXPERIMENTAL '
-                        'nonlinear susceptibility correction for dataset %s.', bold_file)
-            summary.inputs.distortion_correction = 'SyN'
-            workflow.connect([
+                (inputnode, nonlinear_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('subjects_dir', 'inputnode.subjects_dir'),
+                    ('subject_id', 'inputnode.subject_id')]),
+                (bold_reference_wf, nonlinear_sdc_wf, [
+                    ('outputnode.ref_image_brain', 'inputnode.bold_ref')]),
                 (nonlinear_sdc_wf, func_reports_wf, [
-                    ('outputnode.out_mask_report', 'inputnode.bold_mask_report')]),
-                (nonlinear_sdc_wf, bold_reg_wf, [
-                    ('outputnode.out_warp', 'inputnode.fieldwarp'),
-                    ('outputnode.out_reference_brain', 'inputnode.ref_bold_brain'),
-                    ('outputnode.out_mask', 'inputnode.ref_bold_mask')]),
+                    ('outputnode.out_warp_report', 'inputnode.syn_sdc_report')]),
             ])
 
-    if 'template' in output_spaces:
-        # Apply transforms in 1 shot
-        # Only use uncompressed output if AROMA is to be run
-        bold_mni_trans_wf = init_bold_mni_trans_wf(
-            template=template,
-            bold_file_size_gb=bold_file_size_gb,
-            omp_nthreads=omp_nthreads,
-            output_grid_ref=output_grid_ref,
-            use_compression=not (low_mem and use_aroma),
-            use_fieldwarp=(fmaps is not None or use_syn),
-            name='bold_mni_trans_wf'
-        )
+            # XXX Eliminate branch when forcing isn't an option
+            if not fmaps:
+                LOGGER.warn('No fieldmaps found or they were ignored. Using EXPERIMENTAL '
+                            'nonlinear susceptibility correction for dataset %s.', bold_file)
+                summary.inputs.distortion_correction = 'SyN'
+                workflow.connect([
+                    (nonlinear_sdc_wf, func_reports_wf, [
+                        ('outputnode.out_mask_report', 'inputnode.bold_mask_report')]),
+                    (nonlinear_sdc_wf, bold_reg_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
+                        ('outputnode.out_reference_brain', 'inputnode.ref_bold_brain'),
+                        ('outputnode.out_mask', 'inputnode.ref_bold_mask')]),
+                ])
 
-        workflow.connect([
-            (inputnode, bold_mni_trans_wf, [
-                ('bold_file', 'inputnode.name_source'),
-                ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
-            (bold_hmc_wf, bold_mni_trans_wf, [
-                ('outputnode.bold_split', 'inputnode.bold_split'),
-                ('outputnode.xforms', 'inputnode.hmc_xforms')]),
-            (bold_reg_wf, bold_mni_trans_wf, [
-                ('outputnode.itk_bold_to_t1', 'inputnode.itk_bold_to_t1')]),
-            (bold_mni_trans_wf, outputnode, [('outputnode.bold_mni', 'bold_mni'),
-                                             ('outputnode.bold_mask_mni', 'bold_mask_mni')]),
-            (bold_mni_trans_wf, bold_confounds_wf, [
-                ('outputnode.bold_mask_mni', 'inputnode.bold_mask_mni'),
-                ('outputnode.bold_mni', 'inputnode.bold_mni')])
-        ])
+        if 'template' in output_spaces:
+            # Apply transforms in 1 shot
+            # Only use uncompressed output if AROMA is to be run
+            bold_mni_trans_wf = init_bold_mni_trans_wf(
+                template=template,
+                bold_file_size_gb=bold_file_size_gb,
+                omp_nthreads=omp_nthreads,
+                output_grid_ref=output_grid_ref,
+                use_compression=not (low_mem and use_aroma),
+                use_fieldwarp=(fmaps is not None or use_syn),
+                name='bold_mni_trans_wf'
+            )
 
-        if fmaps:
             workflow.connect([
-                (sdc_unwarp_wf, bold_mni_trans_wf, [
-                    ('outputnode.out_warp', 'inputnode.fieldwarp'),
-                    ('outputnode.out_mask', 'inputnode.bold_mask')]),
+                (inputnode, bold_mni_trans_wf, [
+                    ('bold_file', 'inputnode.name_source'),
+                    ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform')]),
+                (bold_hmc_wf, bold_mni_trans_wf, [
+                    ('outputnode.bold_split', 'inputnode.bold_split'),
+                    ('outputnode.xforms', 'inputnode.hmc_xforms')]),
+                (bold_reg_wf, bold_mni_trans_wf, [
+                    ('outputnode.itk_bold_to_t1', 'inputnode.itk_bold_to_t1')]),
+                (bold_mni_trans_wf, outputnode, [('outputnode.bold_mni', 'bold_mni'),
+                                                 ('outputnode.bold_mask_mni', 'bold_mask_mni')]),
+                (bold_mni_trans_wf, bold_confounds_wf, [
+                    ('outputnode.bold_mask_mni', 'inputnode.bold_mask_mni'),
+                    ('outputnode.bold_mni', 'inputnode.bold_mni')])
             ])
-        elif use_syn:
-            workflow.connect([
-                (nonlinear_sdc_wf, bold_mni_trans_wf, [
-                    ('outputnode.out_warp', 'inputnode.fieldwarp'),
+
+            if fmaps:
+                workflow.connect([
+                    (sdc_unwarp_wf, bold_mni_trans_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
+                        ('outputnode.out_mask', 'inputnode.bold_mask')]),
+                ])
+            elif use_syn:
+                workflow.connect([
+                    (nonlinear_sdc_wf, bold_mni_trans_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp'),
                     ('outputnode.out_mask', 'inputnode.bold_mask')]),
             ])
         else:
             workflow.connect([
                 (bold_reference_wf, bold_mni_trans_wf, [
                     ('outputnode.bold_mask', 'inputnode.bold_mask')]),
+                ])
+
+        if freesurfer and any(space.startswith('fs') for space in output_spaces):
+            LOGGER.info('Creating BOLD surface-sampling workflow.')
+            bold_surf_wf = init_bold_surf_wf(output_spaces=output_spaces,
+                                             medial_surface_nan=medial_surface_nan,
+                                             name='bold_surf_wf')
+            workflow.connect([
+                (inputnode, bold_surf_wf, [('subjects_dir', 'inputnode.subjects_dir'),
+                                           ('subject_id', 'inputnode.subject_id')]),
+                (bold_reg_wf, bold_surf_wf, [('outputnode.bold_t1', 'inputnode.source_file')]),
+                (bold_surf_wf, outputnode, [('outputnode.surfaces', 'surfaces')]),
             ])
 
-    if freesurfer and any(space.startswith('fs') for space in output_spaces):
-        LOGGER.info('Creating BOLD surface-sampling workflow.')
-        bold_surf_wf = init_bold_surf_wf(output_spaces=output_spaces,
-                                         medial_surface_nan=medial_surface_nan,
-                                         name='bold_surf_wf')
-        workflow.connect([
-            (inputnode, bold_surf_wf, [('subjects_dir', 'inputnode.subjects_dir'),
-                                       ('subject_id', 'inputnode.subject_id')]),
-            (bold_reg_wf, bold_surf_wf, [('outputnode.bold_t1', 'inputnode.source_file')]),
-            (bold_surf_wf, outputnode, [('outputnode.surfaces', 'surfaces')]),
-        ])
-
-    return workflow
+        return workflow
 
 
 def init_bold_reference_wf(omp_nthreads, bold_file=None, name='bold_reference_wf'):
@@ -792,7 +808,7 @@ def init_bold_hmc_wf(bold_file_size_gb, omp_nthreads, name='bold_hmc_wf'):
     return workflow
 
 
-def init_bold_reg_wf(freesurfer, bold2t1w_dof, bold_file_size_gb, omp_nthreads,
+def init_bold_reg_wf(freesurfer, dismiss_t1w, bold2t1w_dof, bold_file_size_gb, omp_nthreads,
                      name='bold_reg_wf', use_compression=True,
                      use_fieldwarp=False):
     """

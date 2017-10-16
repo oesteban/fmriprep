@@ -14,6 +14,7 @@ fMRIprep base processing workflows
 import sys
 import os
 from copy import deepcopy
+import pdb
 
 from niworkflows.nipype.pipeline import engine as pe
 from niworkflows.nipype.interfaces import utility as niu
@@ -31,9 +32,9 @@ from .bold import init_func_preproc_wf
 
 
 def init_fmriprep_wf(subject_list, task_id, run_uuid,
-                     ignore, debug, low_mem, anat_only, longitudinal, omp_nthreads,
-                     skull_strip_ants, work_dir, output_dir, bids_dir,
-                     freesurfer, output_spaces, template, medial_surface_nan, hires,
+                     ignore, debug, low_mem, anat_only, dismiss_t1w, longitudinal, omp_nthreads,
+                     skull_strip_ants, skull_strip_template, work_dir, output_dir, bids_dir,
+                     freesurfer, output_spaces, template, medial_surface_nan,hires,
                      bold2t1w_dof, fmap_bspline, fmap_demean, use_syn, force_syn,
                      use_aroma, ignore_aroma_err, output_grid_ref):
     """
@@ -65,7 +66,6 @@ def init_fmriprep_wf(subject_list, task_id, run_uuid,
                               output_spaces=['T1w', 'fsnative',
                                             'template', 'fsaverage5'],
                               template='MNI152NLin2009cAsym',
-                              medial_surface_nan=False,
                               hires=True,
                               bold2t1w_dof=9,
                               fmap_bspline=False,
@@ -121,8 +121,6 @@ def init_fmriprep_wf(subject_list, task_id, run_uuid,
              - fsaverage (or other pre-existing FreeSurfer templates)
         template : str
             Name of template targeted by `'template'` output space
-        medial_surface_nan : bool
-            Replace medial wall values with NaNs on functional GIFTI files
         hires : bool
             Enable sub-millimeter preprocessing in FreeSurfer
         bold2t1w_dof : 6, 9 or 12
@@ -157,6 +155,7 @@ def init_fmriprep_wf(subject_list, task_id, run_uuid,
 
     reportlets_dir = os.path.join(work_dir, 'reportlets')
     for subject_id in subject_list:
+        print(subject_id)
         single_subject_wf = init_single_subject_wf(subject_id=subject_id,
                                                    task_id=task_id,
                                                    name="single_subject_" + subject_id + "_wf",
@@ -164,9 +163,11 @@ def init_fmriprep_wf(subject_list, task_id, run_uuid,
                                                    debug=debug,
                                                    low_mem=low_mem,
                                                    anat_only=anat_only,
+                                                   dismiss_t1w=dismiss_t1w,
                                                    longitudinal=longitudinal,
                                                    omp_nthreads=omp_nthreads,
                                                    skull_strip_ants=skull_strip_ants,
+                                                   skull_strip_template=skull_strip_template,
                                                    reportlets_dir=reportlets_dir,
                                                    output_dir=output_dir,
                                                    bids_dir=bids_dir,
@@ -199,9 +200,9 @@ def init_fmriprep_wf(subject_list, task_id, run_uuid,
 
 
 def init_single_subject_wf(subject_id, task_id, name,
-                           ignore, debug, low_mem, anat_only, longitudinal, omp_nthreads,
-                           skull_strip_ants, reportlets_dir, output_dir, bids_dir,
-                           freesurfer, output_spaces, template, medial_surface_nan, hires,
+                           ignore, debug, low_mem, anat_only, dismiss_t1w, longitudinal, omp_nthreads,
+                           skull_strip_ants, skull_strip_template, reportlets_dir, output_dir, bids_dir,
+                           freesurfer, output_spaces, template, medial_surface_nan,hires,
                            bold2t1w_dof, fmap_bspline, fmap_demean, use_syn, force_syn,
                            output_grid_ref, use_aroma, ignore_aroma_err):
     """
@@ -232,7 +233,6 @@ def init_single_subject_wf(subject_id, task_id, name,
                                     template='MNI152NLin2009cAsym',
                                     output_spaces=['T1w', 'fsnative',
                                                   'template', 'fsaverage5'],
-                                    medial_surface_nan=False,
                                     ignore=[],
                                     debug=False,
                                     low_mem=False,
@@ -291,8 +291,6 @@ def init_single_subject_wf(subject_id, task_id, name,
              - fsaverage (or other pre-existing FreeSurfer templates)
         template : str
             Name of template targeted by `'template'` output space
-        medial_surface_nan : bool
-            Replace medial wall values with NaNs on functional GIFTI files
         hires : bool
             Enable sub-millimeter preprocessing in FreeSurfer
         bold2t1w_dof : 6, 9 or 12
@@ -326,25 +324,37 @@ def init_single_subject_wf(subject_id, task_id, name,
             'bold': ['/completely/made/up/path/sub-01_task-nback_bold.nii.gz']
         }
         layout = None
+
     else:
+        print('bids_dir:')
+        print(bids_dir)
+        print('subject_id:')
+        print(subject_id)
+        print('task_id')
+        print(task_id)
         subject_data, layout = collect_data(bids_dir, subject_id, task_id)
 
+    print('base.py line 329: Subject Data:')
+    print(subject_data)
     # Make sure we always go through these two checks
     if not anat_only and subject_data['bold'] == []:
         raise Exception("No BOLD images found for participant {} and task {}. "
                         "All workflows require BOLD images.".format(
                             subject_id, task_id if task_id else '<all>'))
 
-    if not subject_data['t1w']:
-        raise Exception("No T1w images found for participant {}. "
-                        "All workflows require T1w images.".format(subject_id))
+    if not dismiss_t1w and subject_data['t1w'] == []:
+    #if not subject_data['t1w']:
+        # Insert code to run only the functional workflow here
+        raise Exception("No T1w images found for participant {}.".format(subject_id))
+   # if func_only == 1:
+      #  print("Only preprocessing functional scans; coregistering without anatomicals")
 
     workflow = pe.Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(fields=['subjects_dir']),
                         name='inputnode')
 
-    bidssrc = pe.Node(BIDSDataGrabber(subject_data=subject_data, anat_only=anat_only),
+    bidssrc = pe.Node(BIDSDataGrabber(subject_data=subject_data, anat_only=anat_only, dismiss_t1w=dismiss_t1w),
                       name='bidssrc')
 
     bids_info = pe.Node(BIDSInfo(), name='bids_info', run_without_submitting=True)
@@ -366,9 +376,11 @@ def init_single_subject_wf(subject_id, task_id, name,
                             suffix='about'),
         name='ds_about_report', run_without_submitting=True)
 
+    # if dismiss_t1w: skip anat_preproc_wf
     # Preprocessing of T1w (includes registration to MNI)
     anat_preproc_wf = init_anat_preproc_wf(name="anat_preproc_wf",
                                            skull_strip_ants=skull_strip_ants,
+                                           skull_strip_template=skull_strip_template,
                                            output_spaces=output_spaces,
                                            template=template,
                                            debug=debug,
@@ -404,6 +416,7 @@ def init_single_subject_wf(subject_id, task_id, name,
                                                layout=layout,
                                                ignore=ignore,
                                                freesurfer=freesurfer,
+                                               dismiss_t1w=dismiss_t1w,
                                                bold2t1w_dof=bold2t1w_dof,
                                                reportlets_dir=reportlets_dir,
                                                output_spaces=output_spaces,

@@ -473,6 +473,7 @@ def init_carpetplot_wf(mem_gb, metadata, name="bold_carpet_wf"):
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['out_carpetplot']), name='outputnode')
 
+    # TODO: OE revise
     # List transforms
     mrg_xfms = pe.Node(niu.Merge(2), name='mrg_xfms')
 
@@ -704,7 +705,7 @@ in the corresponding confounds file.
 
     # connect the nodes
     workflow.connect([
-        (inputnode, select_std, [('templates', 'keys'),
+        (inputnode, select_std, [('templates', 'items'),
                                  ('bold_std', 'bold_std'),
                                  ('bold_mask_std', 'bold_mask_std')]),
         (inputnode, ica_aroma, [('movpar_file', 'motion_parameters')]),

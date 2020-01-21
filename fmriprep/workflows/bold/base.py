@@ -946,7 +946,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
 data and volume-sampled data, were also generated.
 """
             cifti_volume = spaces.get_space("MNI152NLin6Asym")
-            select_std = pe.Node(KeySelect(fields=['bold_std']),
+            select_std = pe.Node(KeySelect(fields=['bold_std'], no_hash=True),
                                  name='select_std', run_without_submitting=True)
             select_std.inputs.key = cifti_volume
 

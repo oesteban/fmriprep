@@ -465,9 +465,6 @@ def init_carpetplot_wf(mem_gb, metadata, name="bold_carpet_wf"):
         Path of the generated SVG file
 
     """
-    # TODO: OE revise
-    # std_vol_spaces = spaces.filtered('std_vol', 'all')
-
     inputnode = pe.Node(niu.IdentityInterface(
         fields=['bold', 'bold_mask', 'confounds_file',
                 't1_bold_xform', 'std2anat_xfm']),
@@ -476,7 +473,6 @@ def init_carpetplot_wf(mem_gb, metadata, name="bold_carpet_wf"):
     outputnode = pe.Node(niu.IdentityInterface(
         fields=['out_carpetplot']), name='outputnode')
 
-    # TODO: OE revise
     # List transforms
     mrg_xfms = pe.Node(niu.Merge(2), name='mrg_xfms')
 
@@ -522,12 +518,16 @@ def init_carpetplot_wf(mem_gb, metadata, name="bold_carpet_wf"):
     return workflow
 
 
-def init_ica_aroma_wf(spaces, metadata, mem_gb, omp_nthreads,
-                      name='ica_aroma_wf',
-                      susan_fwhm=6.0,
-                      err_on_aroma_warn=False,
-                      aroma_melodic_dim=-200,
-                      use_fieldwarp=True):
+def init_ica_aroma_wf(
+    mem_gb,
+    metadata,
+    omp_nthreads,
+    aroma_melodic_dim=-200,
+    err_on_aroma_warn=False,
+    name='ica_aroma_wf',
+    susan_fwhm=6.0,
+    use_fieldwarp=True,
+):
     """
     Build a workflow that runs `ICA-AROMA`_.
 
@@ -561,18 +561,14 @@ def init_ica_aroma_wf(spaces, metadata, mem_gb, omp_nthreads,
             :simple_form: yes
 
             from fmriprep.workflows.bold.confounds import init_ica_aroma_wf
-            wf = init_ica_aroma_wf(metadata={'RepetitionTime': 1.0},
-                                   mem_gb=3,
-                                   omp_nthreads=1)
+            wf = init_ica_aroma_wf(
+                mem_gb=3,
+                metadata={'RepetitionTime': 1.0},
+                need_resampling=False,
+                omp_nthreads=1)
 
     Parameters
     ----------
-    standard_spaces : str
-        Spatial normalization template used as target when that
-        registration step was previously calculated with
-        :py:func:`~fmriprep.workflows.bold.registration.init_bold_reg_wf`.
-        The template must be one of the MNI templates (fMRIPrep uses
-        ``MNI152NLin2009cAsym`` by default).
     metadata : dict
         BIDS metadata for BOLD file
     mem_gb : float
@@ -658,7 +654,7 @@ in the corresponding confounds file.
     select_std = pe.Node(KeySelect(
         fields=['bold_mask_std', 'bold_std']),
         name='select_std', run_without_submitting=True, no_hash=True)
-    select_std.inputs.key = spaces.get_space('MNI152NLin6Asym')
+    select_std.inputs.key = 'MNI152NLin6Asym'
 
     rm_non_steady_state = pe.Node(niu.Function(function=_remove_volumes,
                                                output_names=['bold_cut']),

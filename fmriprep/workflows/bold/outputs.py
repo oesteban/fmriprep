@@ -57,6 +57,7 @@ def init_func_derivatives_wf(
 
     """
     from smriprep.workflows.outputs import _bids_relative
+    nonstd_spaces = set(spaces.get_nonstd_spaces())
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(fields=[
@@ -82,7 +83,7 @@ def init_func_derivatives_wf(
                                    ('confounds_metadata', 'meta_dict')]),
     ])
 
-    if set(spaces.get_nonstd_spaces()).intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
+    if nonstd_spaces.intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
         ds_bold_native = pe.Node(
             DerivativesDataSink(base_directory=output_dir, desc='preproc',
                                 keep_dtype=True, compress=True, SkullStripped=False,
@@ -111,7 +112,7 @@ def init_func_derivatives_wf(
         ])
 
     # Resample to T1w space
-    if set(spaces.get_nonstd_spaces()).intersection(('T1w', 'anat')):
+    if nonstd_spaces.intersection(('T1w', 'anat')):
         ds_bold_t1 = pe.Node(
             DerivativesDataSink(base_directory=output_dir, space='T1w', desc='preproc',
                                 keep_dtype=True, compress=True, SkullStripped=False,

@@ -735,7 +735,8 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                     syn_unwarp_report_wf.get_node(node).interface.out_path_base = 'fmriprep'
 
     # Map final BOLD mask into T1w space (if required)
-    if set(spaces.get_nonstd_spaces()).intersection(('T1w', 'anat')):
+    nonstd_spaces = set(spaces.get_nonstd_spaces())
+    if nonstd_spaces.intersection(('T1w', 'anat')):
         from niworkflows.interfaces.fixes import (
             FixHeaderApplyTransforms as ApplyTransforms
         )
@@ -755,7 +756,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ('output_image', 'bold_mask_t1')]),
         ])
 
-    if set(spaces.get_nonstd_spaces()).intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
+    if nonstd_spaces.intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
         workflow.connect([
             (bold_bold_trans_wf, outputnode, [
                 ('outputnode.bold', 'bold_native')]),
@@ -969,18 +970,12 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                     ])
 
     # SURFACES ##################################################################################
-
-    # CIFTI output
-    # TODO: OE revise
-    # cifti_spaces = ('fsLR',) if 'fsLR' in spaces.unique() else set()
-    # cifti_output = cifti_output and cifti_spaces
-
-    # TODO: OE revise
-    surface_spaces = []
-    if freesurfer and surface_spaces:
+    # Freesurfer
+    freesurfer_spaces = spaces.get_fs_spaces()
+    if freesurfer and freesurfer_spaces:
         LOGGER.log(25, 'Creating BOLD surface-sampling workflow.')
         bold_surf_wf = init_bold_surf_wf(mem_gb=mem_gb['resampled'],
-                                         surface_spaces=surface_spaces,
+                                         surface_spaces=freesurfer_spaces,
                                          medial_surface_nan=medial_surface_nan,
                                          name='bold_surf_wf')
         workflow.connect([
@@ -993,47 +988,48 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
             (bold_surf_wf, outputnode, [('outputnode.surfaces', 'surfaces')]),
         ])
 
-        if cifti_output:
-            from niworkflows.interfaces.cifti import GenerateCifti
-            bold_surf_wf.__desc__ += """\
+    # CIFTI output
+    if cifti_output:
+        from niworkflows.interfaces.cifti import GenerateCifti
+        bold_surf_wf.__desc__ += """\
 *Grayordinates* files [@hcppipelines], which combine surface-sampled
 data and volume-sampled data, were also generated.
 """
-            select_std = pe.Node(KeySelect(fields=['bold_std'], no_hash=True),
-                                 name='select_std', run_without_submitting=True)
-            select_std.inputs.key = "MNI152NLin6Asym"
+        select_std = pe.Node(KeySelect(fields=['bold_std'], no_hash=True),
+                             name='select_std', run_without_submitting=True)
+        select_std.inputs.key = "MNI152NLin6Asym"
 
-            def _pick_first(tup):
-                return tup[0]
+        def _pick_first(tup):
+            return tup[0]
 
-            order_surfs = pe.MapNode(niu.Function(function=_order_surfs,
-                                                  output_names=["surface_files"]),
-                                     name='order_surfs', iterfield=['density'],
-                                     run_without_submitting=True)
-            order_surfs.inputs.targets = cifti_spaces
+        order_surfs = pe.MapNode(niu.Function(function=_order_surfs,
+                                              output_names=["surface_files"]),
+                                 name='order_surfs', iterfield=['density'],
+                                 run_without_submitting=True)
+        order_surfs.inputs.targets = ('fsLR', )
 
-            gen_cifti = pe.MapNode(GenerateCifti(), iterfield=["surface_bolds", "surface_density"],
-                                   name="gen_cifti")
-            gen_cifti.inputs.TR = metadata.get("RepetitionTime")
-            gen_cifti.inputs.surface_target = 'fsLR'  # only supported surface
+        gen_cifti = pe.MapNode(GenerateCifti(), iterfield=["surface_bolds", "surface_density"],
+                               name="gen_cifti")
+        gen_cifti.inputs.TR = metadata.get("RepetitionTime")
+        gen_cifti.inputs.surface_target = 'fsLR'  # only supported surface
 
-            workflow.connect([
-                (bold_std_trans_wf, select_std, [
-                    ('outputnode.templates', 'keys'),
-                    ('outputnode.bold_std', 'bold_std')]),
-                (bold_surf_wf, order_surfs, [('outputnode.surfaces', 'surface_bolds'),
-                                             ('outputnode.fslr_density', 'density')]),
-                (bold_surf_wf, gen_cifti, [('outputnode.fslr_density', 'surface_density')]),
-                (order_surfs, gen_cifti, [('surface_files', 'surface_bolds')]),
-                (inputnode, gen_cifti, [('subjects_dir', 'subjects_dir')]),
-                (select_std, gen_cifti, [
-                    ('bold_std', 'bold_file'),
-                    (('key', _pick_first), 'volume_target')]),
-                (gen_cifti, outputnode, [('out_file', 'bold_cifti'),
-                                         ('variant', 'cifti_variant'),
-                                         ('out_metadata', 'cifti_metadata'),
-                                         ('density', 'cifti_density')]),
-            ])
+        workflow.connect([
+            (bold_std_trans_wf, select_std, [
+                ('outputnode.templates', 'keys'),
+                ('outputnode.bold_std', 'bold_std')]),
+            (bold_surf_wf, order_surfs, [('outputnode.surfaces', 'surface_bolds'),
+                                         ('outputnode.fslr_density', 'density')]),
+            (bold_surf_wf, gen_cifti, [('outputnode.fslr_density', 'surface_density')]),
+            (order_surfs, gen_cifti, [('surface_files', 'surface_bolds')]),
+            (inputnode, gen_cifti, [('subjects_dir', 'subjects_dir')]),
+            (select_std, gen_cifti, [
+                ('bold_std', 'bold_file'),
+                (('key', _pick_first), 'volume_target')]),
+            (gen_cifti, outputnode, [('out_file', 'bold_cifti'),
+                                     ('variant', 'cifti_variant'),
+                                     ('out_metadata', 'cifti_metadata'),
+                                     ('density', 'cifti_density')]),
+        ])
 
     # REPORTING ############################################################
     ds_report_summary = pe.Node(

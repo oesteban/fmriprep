@@ -698,8 +698,8 @@ def parse_spaces(opts):
     """
     spaces = opts.output_spaces
 
-    # ERROR check if use_aroma was specified, but the correct template was not
     if opts.use_aroma:
+        # Make sure there's a normalization to FSL for AROMA to use.
         spaces.add('MNI152NLin6Asym')
 
     if opts.cifti_output:
@@ -714,8 +714,8 @@ def parse_spaces(opts):
     if not spaces.spaces:
         warnings.warn(
             "fMRIPrep will not generate preprocessed derivatives because "
-            "it was run without `--output-spaces`, `--use-aroma`, "
-            "and/or `--cifti-output`."
+            "non of `--output-spaces`, `--use-aroma`, or `--cifti-output` "
+            "were set."
         )
 
     # Add the default standard space (required by several sub-workflows)

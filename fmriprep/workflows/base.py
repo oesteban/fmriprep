@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """
@@ -31,7 +29,6 @@ from smriprep.workflows.anatomical import init_anat_preproc_wf
 from ..interfaces import SubjectSummary, AboutSummary, DerivativesDataSink
 from ..__about__ import __version__
 from .bold import init_func_preproc_wf
-# from .bold.outputs import _remove_internal_spaces
 
 
 def init_fmriprep_wf(
@@ -88,7 +85,7 @@ def init_fmriprep_wf(
             from collections import namedtuple, OrderedDict
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
             from fmriprep.workflows.base import init_fmriprep_wf
-            from niworkflows.utils.spaces import SpatialReferences
+            from niworkflows.utils.spaces import Space, SpatialReferences
             os.environ['FREESURFER_HOME'] = os.getcwd()
             wf = init_fmriprep_wf(
                 anat_only=False,
@@ -117,7 +114,7 @@ def init_fmriprep_wf(
                 regressors_fd_th=0.5,
                 run_uuid='X',
                 skull_strip_fixed_seed=False,
-                skull_strip_template=('OASIS30ANTs', {}),
+                skull_strip_template=Space.from_string('OASIS30ANTs')[0],
                 spaces=SpatialReferences([('MNI152Lin',),
                                           ('fsaverage', {'density': '10k'}),
                                           ('T1w',),
@@ -223,8 +220,7 @@ def init_fmriprep_wf(
             BIDSFreeSurferDir(
                 derivatives=output_dir,
                 freesurfer_home=os.getenv('FREESURFER_HOME'),
-                spaces=[s for s in spaces.unique()
-                        if s.startswith('fsaverage') or s == 'fsnative']),
+                spaces=spaces.get_fs_spaces()),
             name='fsdir_run_' + run_uuid.replace('-', '_'), run_without_submitting=True)
         if fs_subjects_dir is not None:
             fsdir.inputs.subjects_dir = str(fs_subjects_dir.absolute())
@@ -529,8 +525,8 @@ It is released under the [CC0]\
         bids_dir=layout.root, bids_validate=False), name='bids_info')
 
     summary = pe.Node(SubjectSummary(
-            std_spaces=spaces.filtered('std', 'output', name_only=True) or [],
-            nstd_spaces=spaces.filtered('nstd', 'output', name_only=True) or []),
+        std_spaces=spaces.get_std_spaces(),
+        nstd_spaces=spaces.get_nonstd_spaces(only_names=True)),
         name='summary', run_without_submitting=True)
 
     about = pe.Node(AboutSummary(version=__version__,

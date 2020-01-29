@@ -38,19 +38,17 @@ def check_deps(workflow):
 
 
 def get_parser():
-    """Build parser object"""
-    from niworkflows.utils.spaces import (
-        Space, OutputSpaceAction, SpatialReferences, NONSTANDARD_REFERENCES)
-    from templateflow.api import templates
+    """Build parser object."""
+    from niworkflows.utils.spaces import Space, SpatialReferences, OutputSpacesAction
     from packaging.version import Version
     from ..__about__ import __version__
     from .version import check_latest, is_flagged
 
-    verstr = 'fmriprep v{}'.format(__version__)
+    verstr = 'fMRIPrep v{}'.format(__version__)
     currentv = Version(__version__)
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
-    parser = ArgumentParser(description='FMRIPREP: fMRI PREProcessing workflows',
+    parser = ArgumentParser(description='fMRIPrep: fMRI PREProcessing workflows',
                             formatter_class=ArgumentDefaultsHelpFormatter)
 
     # Arguments as specified by BIDS-Apps
@@ -64,7 +62,7 @@ def get_parser():
                              'reports')
     parser.add_argument('analysis_level', choices=['participant'],
                         help='processing stage to be run, only "participant" in the case of '
-                             'FMRIPREP (see BIDS-Apps specification).')
+                             'fMRIPrep (see BIDS-Apps specification).')
 
     # optional arguments
     parser.add_argument('--version', action='version', version=verstr)
@@ -129,21 +127,19 @@ def get_parser():
              'option is not enabled, standard EPI-T1 coregistration is performed '
              'using the middle echo.')
     g_conf.add_argument(
-        '--output-spaces', nargs='+', action=OutputSpaceAction, default=SpatialReferences(),
+        '--output-spaces', nargs='+', action=OutputSpacesAction, default=SpatialReferences(),
         help="""\
 Standard and non-standard spaces to resample anatomical and functional images to. \
 Standard spaces may be specified by the form \
-``<TEMPLATE>[:res-<resolution>][:cohort-<label>][...]``, where ``<TEMPLATE>`` is \
-a keyword (valid keywords: %s) or path pointing to a user-supplied template, and \
-may be followed by optional, colon-separated parameters. \
-Non-standard spaces (valid keywords: %s) imply specific orientations and sampling \
-grids. \
+``<SPACE>[:cohort-<label>][:res-<resolution>][...]``, where ``<SPACE>`` is \
+a keyword designating a spatial reference, and may be followed by optional, \
+colon-separated parameters. \
+Non-standard spaces imply specific orientations and sampling grids. \
 Important to note, the ``res-*`` modifier does not define the resolution used for \
 the spatial normalization.
 For further details, please check out \
-https://fmriprep.readthedocs.io/en/%s/spaces.html""" % (
-            ', '.join('"%s"' % s for s in templates()), ', '.join(NONSTANDARD_REFERENCES),
-            currentv.base_version if is_release else 'latest'))
+https://fmriprep.readthedocs.io/en/%s/spaces.html""" % currentv.base_version
+        if is_release else 'latest')
 
     g_conf.add_argument('--bold2t1w-dof', action='store', default=6, choices=[6, 9, 12], type=int,
                         help='Degrees of freedom when registering BOLD to T1w images. '
@@ -497,6 +493,8 @@ def build_workflow(opts, retval):
       * BIDS dataset path: {bids_dir}.
       * Participant list: {subject_list}.
       * Run identifier: {uuid}.
+
+    {spaces}
     """.format
 
     bids_dir = opts.bids_dir.resolve()
@@ -523,8 +521,6 @@ def build_workflow(opts, retval):
             'Please modify the output path.')
         retval['return_code'] = 1
         return retval
-
-    spaces = parse_spaces(opts)
 
     # Set up some instrumental utilities
     run_uuid = '%s_%s' % (strftime('%Y%m%d-%H%M%S'), uuid.uuid4())
@@ -626,7 +622,8 @@ def build_workflow(opts, retval):
         version=__version__,
         bids_dir=bids_dir,
         subject_list=subject_list,
-        uuid=run_uuid)
+        uuid=run_uuid,
+        spaces=opts.output_spaces)
     )
 
     retval['workflow'] = init_fmriprep_wf(
@@ -657,7 +654,7 @@ def build_workflow(opts, retval):
         regressors_dvars_th=opts.dvars_spike_threshold,
         skull_strip_fixed_seed=opts.skull_strip_fixed_seed,
         skull_strip_template=opts.skull_strip_template[0],
-        spaces=spaces,
+        spaces=parse_spaces(opts),
         subject_list=subject_list,
         t2s_coreg=opts.t2s_coreg,
         task_id=opts.task_id,
@@ -693,22 +690,13 @@ def build_workflow(opts, retval):
 
 def parse_spaces(opts):
     """
-    Ensures user defined output spaces are correctly parsed.
+    Ensure user-defined spatial references for outputs are correctly parsed.
 
     Certain options require normalization to a space not explicitly defined by users.
     These spaces will not be included in the final outputs.
+
     """
     spaces = opts.output_spaces
-
-    # These arguments implicitly signal expected output
-    if not spaces:
-        if not any((opts.use_aroma, opts.cifti_output)):
-            warnings.warn(
-                "No outputs are expected from this fMRIPrep run. "
-                "Please add desired outputs using the `--output-spaces` flag"
-            )
-        # ensure a standard space is defined
-        spaces += ("MNI152NLin2009cAsym",)
 
     # ERROR check if use_aroma was specified, but the correct template was not
     if opts.use_aroma:
@@ -720,11 +708,18 @@ def parse_spaces(opts):
             '170k': '59k'
         }
         spaces.add(('fsLR', {'den': grayords[opts.cifti_output]}))
-        spaces.add(('MNI152NLin6Asym', {'res': 2}))
+        spaces.add('MNI152NLin6Asym')
 
-    if 'fsLR' in spaces.get_fs_spaces():
-        spaces.add(('fsaverage',))
+    # These arguments implicitly signal expected output
+    if not spaces.spaces:
+        warnings.warn(
+            "fMRIPrep will not generate preprocessed derivatives because "
+            "it was run without `--output-spaces`, `--use-aroma`, "
+            "and/or `--cifti-output`."
+        )
 
+    # Add the default standard space (required by several sub-workflows)
+    spaces.add("MNI152NLin2009cAsym")
     return spaces
 
 

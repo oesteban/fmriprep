@@ -82,7 +82,7 @@ def init_func_derivatives_wf(
                                    ('confounds_metadata', 'meta_dict')]),
     ])
 
-    if spaces.unique('output').intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
+    if set(spaces.get_nonstd_spaces()).intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
         ds_bold_native = pe.Node(
             DerivativesDataSink(base_directory=output_dir, desc='preproc',
                                 keep_dtype=True, compress=True, SkullStripped=False,
@@ -111,7 +111,7 @@ def init_func_derivatives_wf(
         ])
 
     # Resample to T1w space
-    if spaces.unique('output').intersection(('T1w', 'anat')):
+    if set(spaces.get_nonstd_spaces()).intersection(('T1w', 'anat')):
         ds_bold_t1 = pe.Node(
             DerivativesDataSink(base_directory=output_dir, space='T1w', desc='preproc',
                                 keep_dtype=True, compress=True, SkullStripped=False,
@@ -155,9 +155,10 @@ def init_func_derivatives_wf(
                                                ('bold_aparc_t1', 'in_file')]),
             ])
 
-    # Resample to template (default: MNI)
-    volume_std_spaces = spaces.filtered('std_vol', 'output')
-    surface_spaces = spaces.filtered('surf', 'output')
+    # Resample to template
+    # TODO: OE revise
+    volume_std_spaces = False
+    surface_spaces = False
 
     if volume_std_spaces:
         select_std = pe.MapNode(KeySelect(fields=['bold_std', 'bold_std_ref', 'bold_mask_std'],

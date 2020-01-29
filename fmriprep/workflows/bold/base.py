@@ -423,10 +423,6 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
         name='summary', mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True)
     summary.inputs.dummy_scans = dummy_scans
 
-    # CIFTI output
-    cifti_spaces = ('fsLR',) if 'fsLR' in spaces.unique() else set()
-    cifti_output = cifti_output and cifti_spaces
-    std_vol_spaces = spaces.filtered('std_vol', 'all')
     func_derivatives_wf = init_func_derivatives_wf(
         bids_root=layout.root,
         cifti_output=cifti_output,
@@ -712,7 +708,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
             sdc_select_std = pe.Node(
                 KeySelect(fields=['std2anat_xfm'], no_hash=True),
                 name='sdc_select_std', run_without_submitting=True)
-            sdc_select_std.inputs.key = spaces.get_space('MNI152NLin2009cAsym')
+            sdc_select_std.inputs.key = 'MNI152NLin2009cAsym'
             workflow.connect([
                 (inputnode, sdc_select_std, [('joint_std2anat_xfm', 'std2anat_xfm'),
                                              ('joint_template', 'keys')]),
@@ -739,7 +735,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                     syn_unwarp_report_wf.get_node(node).interface.out_path_base = 'fmriprep'
 
     # Map final BOLD mask into T1w space (if required)
-    if spaces.unique('output').intersection(('T1w', 'anat')):
+    if set(spaces.get_nonstd_spaces()).intersection(('T1w', 'anat')):
         from niworkflows.interfaces.fixes import (
             FixHeaderApplyTransforms as ApplyTransforms
         )
@@ -759,7 +755,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ('output_image', 'bold_mask_t1')]),
         ])
 
-    if spaces.unique('output').intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
+    if set(spaces.get_nonstd_spaces()).intersection(('func', 'run', 'bold', 'boldref', 'sbref')):
         workflow.connect([
             (bold_bold_trans_wf, outputnode, [
                 ('outputnode.bold', 'bold_native')]),
@@ -768,14 +764,14 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ('outputnode.bold_mask', 'inputnode.bold_mask_native')]),
         ])
 
-    if std_vol_spaces:
+    if spaces.get_std_spaces():
         # Apply transforms in 1 shot
         # Only use uncompressed output if AROMA is to be run
         bold_std_trans_wf = init_bold_std_trans_wf(
             freesurfer=freesurfer,
             mem_gb=mem_gb['resampled'],
             omp_nthreads=omp_nthreads,
-            standard_spaces=std_vol_spaces,
+            std_references=spaces,
             name='bold_std_trans_wf',
             use_compression=not low_mem,
             use_fieldwarp=bool(fmaps),
@@ -811,31 +807,30 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                     ('outputnode.bold_aparc_std', 'bold_aparc_std')]),
             ])
 
-        if 'MNI152NLin2009cAsym' in spaces:  # TODO: OE revise
-            # Extract out the 'MNI152NLin2009cAsym' transform from normalizations
-            carpetplot_select_std = pe.Node(
-                KeySelect(fields=['std2anat_xfm'], key='MNI152NLin2009cAsym'),
-                name='carpetplot_select_std', run_without_submitting=True)
+        # Xform to 'MNI152NLin2009cAsym' is always computed.
+        carpetplot_select_std = pe.Node(
+            KeySelect(fields=['std2anat_xfm'], key='MNI152NLin2009cAsym'),
+            name='carpetplot_select_std', run_without_submitting=True)
 
-            carpetplot_wf = init_carpetplot_wf(
-                mem_gb=mem_gb['resampled'],  # TODO: OE revise
-                metadata=metadata,
-                name='carpetplot_wf')
+        carpetplot_wf = init_carpetplot_wf(
+            mem_gb=mem_gb['resampled'],
+            metadata=metadata,
+            name='carpetplot_wf')
 
-            workflow.connect([
-                (inputnode, carpetplot_select_std, [
-                    ('joint_std2anat_xfm', 'std2anat_xfm'),
-                    ('joint_template', 'keys')]),
-                (carpetplot_select_std, carpetplot_wf, [
-                    ('std2anat_xfm', 'inputnode.std2anat_xfm')]),
-                (bold_bold_trans_wf if not multiecho else bold_t2s_wf, carpetplot_wf, [
-                    ('outputnode.bold', 'inputnode.bold'),
-                    ('outputnode.bold_mask', 'inputnode.bold_mask')]),
-                (bold_reg_wf, carpetplot_wf, [
-                    ('outputnode.itk_t1_to_bold', 'inputnode.t1_bold_xform')]),
-                (bold_confounds_wf, carpetplot_wf, [
-                    ('outputnode.confounds_file', 'inputnode.confounds_file')]),
-            ])
+        workflow.connect([
+            (inputnode, carpetplot_select_std, [
+                ('joint_std2anat_xfm', 'std2anat_xfm'),
+                ('joint_template', 'keys')]),
+            (carpetplot_select_std, carpetplot_wf, [
+                ('std2anat_xfm', 'inputnode.std2anat_xfm')]),
+            (bold_bold_trans_wf if not multiecho else bold_t2s_wf, carpetplot_wf, [
+                ('outputnode.bold', 'inputnode.bold'),
+                ('outputnode.bold_mask', 'inputnode.bold_mask')]),
+            (bold_reg_wf, carpetplot_wf, [
+                ('outputnode.itk_t1_to_bold', 'inputnode.t1_bold_xform')]),
+            (bold_confounds_wf, carpetplot_wf, [
+                ('outputnode.confounds_file', 'inputnode.confounds_file')]),
+        ])
 
         if not multiecho:
             workflow.connect([
@@ -865,12 +860,13 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
         ])
 
         if use_aroma:  # ICA-AROMA workflow
+            from niworkflows.utils.spaces import Space
             from .confounds import init_ica_aroma_wf
 
+            aroma_space = Space('MNI152NLin6Asym', {'res': '2'})
             ica_aroma_wf = init_ica_aroma_wf(
-                spaces=spaces,
-                metadata=metadata,
                 mem_gb=mem_gb['resampled'],
+                metadata=metadata,
                 omp_nthreads=omp_nthreads,
                 use_fieldwarp=bool(fmaps),
                 err_on_aroma_warn=err_on_aroma_warn,
@@ -894,10 +890,6 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ]),
             ])
             workflow.connect([
-                (bold_std_trans_wf, ica_aroma_wf, [
-                    ('outputnode.bold_std', 'inputnode.bold_std'),
-                    ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
-                    ('outputnode.templates', 'inputnode.templates')]),
                 (inputnode, ica_aroma_wf, [
                     ('bold_file', 'inputnode.name_source')]),
                 (bold_hmc_wf, ica_aroma_wf, [
@@ -921,8 +913,70 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 (mrg_conf_metadata2, outputnode, [('out_dict', 'confounds_metadata')]),
             ])
 
+            if aroma_space in spaces:
+                # If a conversion on MNI152NLin6Asym:res-2 exists, just use it.
+                workflow.connect([
+                    (bold_std_trans_wf, ica_aroma_wf, [
+                        ('outputnode.bold_std', 'inputnode.bold_std'),
+                        ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
+                        ('outputnode.templates', 'inputnode.templates')]),
+                ])
+            else:
+                # Otherwise, prepare an ad-hoc MNI152NLin6Asym:res-2 conversion.
+                from niworkflows.utils.spaces import SpatialReferences
+                bold_std_aroma_wf = init_bold_std_trans_wf(
+                    freesurfer=False,
+                    mem_gb=mem_gb['resampled'],
+                    omp_nthreads=omp_nthreads,
+                    std_references=SpatialReferences([aroma_space]),
+                    name='bold_std_aroma_wf',
+                    use_compression=not low_mem,
+                    use_fieldwarp=bool(fmaps),
+                )
+                workflow.connect([
+                    (inputnode, bold_std_aroma_wf, [
+                        ('joint_template', 'inputnode.templates'),
+                        ('joint_anat2std_xfm', 'inputnode.anat2std_xfm'),
+                        ('bold_file', 'inputnode.name_source'),
+                        ('t1w_aseg', 'inputnode.bold_aseg'),
+                        ('t1w_aparc', 'inputnode.bold_aparc')]),
+                    (bold_hmc_wf, bold_std_aroma_wf, [
+                        ('outputnode.xforms', 'inputnode.hmc_xforms')]),
+                    (bold_reg_wf, bold_std_aroma_wf, [
+                        ('outputnode.itk_bold_to_t1', 'inputnode.itk_bold_to_t1')]),
+                    (bold_bold_trans_wf if not multiecho else bold_t2s_wf, bold_std_aroma_wf, [
+                        ('outputnode.bold_mask', 'inputnode.bold_mask')]),
+                    (bold_sdc_wf, bold_std_aroma_wf, [
+                        ('outputnode.out_warp', 'inputnode.fieldwarp')]),
+                    (bold_std_aroma_wf, ica_aroma_wf, [
+                        ('outputnode.bold_std', 'inputnode.bold_std'),
+                        ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
+                        ('outputnode.templates', 'inputnode.templates')]),
+                ])
+                if not multiecho:
+                    workflow.connect([
+                        (bold_split, bold_std_aroma_wf, [
+                            ('out_files', 'inputnode.bold_split')])
+                    ])
+                else:
+                    split_opt_comb = bold_split.clone(name='split_opt_comb')
+                    workflow.connect([
+                        (bold_t2s_wf, split_opt_comb, [
+                            ('outputnode.bold', 'in_file')]),
+                        (split_opt_comb, bold_std_aroma_wf, [
+                            ('out_files', 'inputnode.bold_split')
+                        ])
+                    ])
+
     # SURFACES ##################################################################################
-    surface_spaces = spaces.filtered('surf', 'all')
+
+    # CIFTI output
+    # TODO: OE revise
+    # cifti_spaces = ('fsLR',) if 'fsLR' in spaces.unique() else set()
+    # cifti_output = cifti_output and cifti_spaces
+
+    # TODO: OE revise
+    surface_spaces = []
     if freesurfer and surface_spaces:
         LOGGER.log(25, 'Creating BOLD surface-sampling workflow.')
         bold_surf_wf = init_bold_surf_wf(mem_gb=mem_gb['resampled'],
@@ -945,10 +999,9 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
 *Grayordinates* files [@hcppipelines], which combine surface-sampled
 data and volume-sampled data, were also generated.
 """
-            cifti_volume = spaces.get_space("MNI152NLin6Asym")
             select_std = pe.Node(KeySelect(fields=['bold_std'], no_hash=True),
                                  name='select_std', run_without_submitting=True)
-            select_std.inputs.key = cifti_volume
+            select_std.inputs.key = "MNI152NLin6Asym"
 
             def _pick_first(tup):
                 return tup[0]

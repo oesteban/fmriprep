@@ -241,7 +241,7 @@ def init_bold_std_trans_wf(
     freesurfer,
     mem_gb,
     omp_nthreads,
-    standard_spaces,
+    std_references,
     name='bold_std_trans_wf',
     use_compression=True,
     use_fieldwarp=False
@@ -268,8 +268,10 @@ def init_bold_std_trans_wf(
                 freesurfer=True,
                 mem_gb=3,
                 omp_nthreads=1,
-                standard_spaces=OrderedDict([('MNI152Lin', {}),
-                                             ('fsaverage', {'density': '10k'})]),
+                std_references=[
+                    ('MNI152Lin', {}),
+                    ('MNIPediatricAsym', {'cohort': '6'}),
+                ]),
             )
 
     Parameters
@@ -280,13 +282,10 @@ def init_bold_std_trans_wf(
         Size of BOLD file in GB
     omp_nthreads : int
         Maximum number of threads an individual process may use
-    standard_spaces : OrderedDict
-        Ordered dictionary where keys are TemplateFlow ID strings (e.g.,
-        ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
-        or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        Values of the dictionary aggregate modifiers (e.g., the value for the key ``MNI152Lin``
-        could be ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm
-        resolution version of the selected template).
+    std_references : :obj:`list` of :obj:`tuple`
+        List of tuple pairs where the first element is a TemplateFlow ID string (e.g.,
+        ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``),
+        and the second is a specification dictionary.
     name : str
         Name of workflow (default: ``bold_std_trans_wf``)
     use_compression : bool
@@ -341,21 +340,22 @@ def init_bold_std_trans_wf(
         described outputs.
 
     """
-    # Filter ``standard_spaces``
-    vol_std_spaces = [space[0] for space in standard_spaces]
     workflow = Workflow(name=name)
 
-    if len(vol_std_spaces) == 1:
+    vol_references = [
+        (s.fullname, s.spec) for s in std_references.get_templates(dim=(3,))
+    ]
+    if len(vol_references) == 1:
         workflow.__desc__ = """\
 The BOLD time-series were resampled into standard space,
 generating a *preprocessed BOLD run in {tpl} space*.
-""".format(tpl=vol_std_spaces)
-    else:
+""".format(tpl=vol_references[0][0])
+    elif len(vol_references) > 1:
         workflow.__desc__ = """\
 The BOLD time-series were resampled into several standard spaces,
 correspondingly generating the following *spatially-normalized,
 preprocessed BOLD runs*: {tpl}.
-""".format(tpl=', '.join(vol_std_spaces))
+""".format(tpl=', '.join([s for s, _ in vol_references]))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -368,18 +368,20 @@ preprocessed BOLD runs*: {tpl}.
             'hmc_xforms',
             'itk_bold_to_t1',
             'name_source',
+            'std_target',
             'templates',
         ]),
         name='inputnode'
     )
+    # Generate conversions for every template+spec at the input
+    inputnode.iterables = [('std_target', vol_references)]
 
-    select_std = pe.Node(KeySelect(
-        fields=['anat2std_xfm', 'resolution'], no_hash=True),
-        name='select_std', run_without_submitting=True)
-    select_std.inputs.resolution = [
-        specs.get('resolution') or specs.get('res') or 'native' for tpl, specs in standard_spaces
-    ]
-    select_std.iterables = ('key', standard_spaces)
+    split_target = pe.Node(niu.Function(
+        function=_split_spec, input_names=['in_target'], output_names=['name', 'spec']),
+        run_without_submitting=True, name='split_target')
+
+    select_std = pe.Node(KeySelect(fields=['anat2std_xfm']),
+                         name='select_std', run_without_submitting=True)
 
     select_tpl = pe.Node(niu.Function(function=_select_template),
                          name='select_tpl', run_without_submitting=True)
@@ -396,16 +398,17 @@ preprocessed BOLD runs*: {tpl}.
     # Write corrected file in the designated output dir
     mask_merge_tfms = pe.Node(niu.Merge(2), name='mask_merge_tfms', run_without_submitting=True,
                               mem_gb=DEFAULT_MEMORY_MIN_GB)
-
     workflow.connect([
+        (inputnode, split_target, [('std_target', 'in_target')]),
         (inputnode, select_std, [('templates', 'keys'),
                                  ('anat2std_xfm', 'anat2std_xfm')]),
         (inputnode, mask_std_tfm, [('bold_mask', 'input_image')]),
         (inputnode, gen_ref, [(('bold_split', _first), 'moving_image')]),
         (inputnode, mask_merge_tfms, [(('itk_bold_to_t1', _aslist), 'in2')]),
+        (split_target, select_std, [('name', 'key')]),
         (select_std, select_tpl, [('key', 'template')]),
         (select_std, mask_merge_tfms, [('anat2std_xfm', 'in1')]),
-        (select_std, gen_ref, [(('resolution', _is_native), 'keep_native')]),
+        (split_target, gen_ref, [(('spec', _is_native), 'keep_native')]),
         (select_tpl, gen_ref, [('out', 'fixed_image')]),
         (mask_merge_tfms, mask_std_tfm, [('out', 'transforms')]),
         (gen_ref, mask_std_tfm, [('out_file', 'reference_image')]),
@@ -444,7 +447,10 @@ preprocessed BOLD runs*: {tpl}.
     ])
 
     # Connect output nodes
-    output_names = ['bold_std', 'bold_std_ref', 'bold_mask_std', 'templates']
+    output_names = [
+        'bold_std', 'bold_std_ref', 'bold_mask_std',
+        'templates', 'spatial_reference',
+    ]
     if freesurfer:
         output_names += ['bold_aseg_std', 'bold_aparc_std']
 
@@ -453,6 +459,8 @@ preprocessed BOLD runs*: {tpl}.
                           name='poutputnode')
 
     workflow.connect([
+        (inputnode, poutputnode, [
+            (('std_target', _gen_ref_name), 'spatial_reference')]),
         (gen_final_ref, poutputnode, [('outputnode.ref_image', 'bold_std_ref')]),
         (merge, poutputnode, [('out_file', 'bold_std')]),
         (mask_std_tfm, poutputnode, [('output_image', 'bold_mask_std')]),
@@ -712,6 +720,16 @@ def init_bold_preproc_report_wf(mem_gb, reportlets_dir, name='bold_preproc_repor
     return workflow
 
 
+def _split_spec(in_target):
+    name, spec = in_target
+    return name, spec
+
+
+def _gen_ref_name(in_tuple):
+    return '_'.join(['space-%s' % in_tuple[0].split(':')[0]] + [
+        '-'.join(item) for item in in_tuple[1].items()])
+
+
 def _select_template(template):
     from niworkflows.utils.misc import get_template_specs
     template, specs = template
@@ -730,7 +748,10 @@ def _aslist(in_value):
 
 
 def _is_native(in_value):
-    return in_value == 'native'
+    return (
+        in_value.get('resolution') == 'native'
+        or in_value.get('res') == 'native'
+    )
 
 
 def _tpl_res(in_value):

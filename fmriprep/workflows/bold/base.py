@@ -442,7 +442,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
             ('bold_mask_t1', 'inputnode.bold_mask_t1'),
             ('bold_native', 'inputnode.bold_native'),
             ('confounds', 'inputnode.confounds'),
-            ('surfaces', 'inputnode.surfaces'),
+            ('surfaces', 'inputnode.surf_files'),
             ('aroma_noise_ics', 'inputnode.aroma_noise_ics'),
             ('melodic_mix', 'inputnode.melodic_mix'),
             ('nonaggr_denoised_file', 'inputnode.nonaggr_denoised_file'),
@@ -848,12 +848,11 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ])
             ])
 
-        # Artifacts resampled in MNI space can only be sinked if they
-        # were actually generated. See #1348.
-        # Uses the parameterized outputnode to generate all outputs
+        # func_derivatives_wf internally parametrizes over snapshotted spaces.
         workflow.connect([
             (bold_std_trans_wf, func_derivatives_wf, [
-                ('outputnode.templates', 'inputnode.template'),
+                ('outputnode.template', 'inputnode.template'),
+                ('outputnode.spatial_reference', 'inputnode.spatial_reference'),
                 ('outputnode.bold_std_ref', 'inputnode.bold_std_ref'),
                 ('outputnode.bold_std', 'inputnode.bold_std'),
                 ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
@@ -861,10 +860,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
         ])
 
         if use_aroma:  # ICA-AROMA workflow
-            from niworkflows.utils.spaces import Space
             from .confounds import init_ica_aroma_wf
-
-            aroma_space = Space('MNI152NLin6Asym', {'res': '2'})
             ica_aroma_wf = init_ica_aroma_wf(
                 mem_gb=mem_gb['resampled'],
                 metadata=metadata,
@@ -912,62 +908,11 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                      ('outputnode.nonaggr_denoised_file', 'nonaggr_denoised_file')]),
                 (join, outputnode, [('out_file', 'confounds')]),
                 (mrg_conf_metadata2, outputnode, [('out_dict', 'confounds_metadata')]),
+                (bold_std_trans_wf, ica_aroma_wf, [
+                    ('outputnode.bold_std', 'inputnode.bold_std'),
+                    ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
+                    ('outputnode.spatial_reference', 'inputnode.spatial_reference')]),
             ])
-
-            if aroma_space in spaces:
-                # If a conversion on MNI152NLin6Asym:res-2 exists, just use it.
-                workflow.connect([
-                    (bold_std_trans_wf, ica_aroma_wf, [
-                        ('outputnode.bold_std', 'inputnode.bold_std'),
-                        ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
-                        ('outputnode.templates', 'inputnode.templates')]),
-                ])
-            else:
-                # Otherwise, prepare an ad-hoc MNI152NLin6Asym:res-2 conversion.
-                from niworkflows.utils.spaces import SpatialReferences
-                bold_std_aroma_wf = init_bold_std_trans_wf(
-                    freesurfer=False,
-                    mem_gb=mem_gb['resampled'],
-                    omp_nthreads=omp_nthreads,
-                    std_references=SpatialReferences([aroma_space]),
-                    name='bold_std_aroma_wf',
-                    use_compression=not low_mem,
-                    use_fieldwarp=bool(fmaps),
-                )
-                workflow.connect([
-                    (inputnode, bold_std_aroma_wf, [
-                        ('joint_template', 'inputnode.templates'),
-                        ('joint_anat2std_xfm', 'inputnode.anat2std_xfm'),
-                        ('bold_file', 'inputnode.name_source'),
-                        ('t1w_aseg', 'inputnode.bold_aseg'),
-                        ('t1w_aparc', 'inputnode.bold_aparc')]),
-                    (bold_hmc_wf, bold_std_aroma_wf, [
-                        ('outputnode.xforms', 'inputnode.hmc_xforms')]),
-                    (bold_reg_wf, bold_std_aroma_wf, [
-                        ('outputnode.itk_bold_to_t1', 'inputnode.itk_bold_to_t1')]),
-                    (bold_bold_trans_wf if not multiecho else bold_t2s_wf, bold_std_aroma_wf, [
-                        ('outputnode.bold_mask', 'inputnode.bold_mask')]),
-                    (bold_sdc_wf, bold_std_aroma_wf, [
-                        ('outputnode.out_warp', 'inputnode.fieldwarp')]),
-                    (bold_std_aroma_wf, ica_aroma_wf, [
-                        ('outputnode.bold_std', 'inputnode.bold_std'),
-                        ('outputnode.bold_mask_std', 'inputnode.bold_mask_std'),
-                        ('outputnode.templates', 'inputnode.templates')]),
-                ])
-                if not multiecho:
-                    workflow.connect([
-                        (bold_split, bold_std_aroma_wf, [
-                            ('out_files', 'inputnode.bold_split')])
-                    ])
-                else:
-                    split_opt_comb = bold_split.clone(name='split_opt_comb')
-                    workflow.connect([
-                        (bold_t2s_wf, split_opt_comb, [
-                            ('outputnode.bold', 'in_file')]),
-                        (split_opt_comb, bold_std_aroma_wf, [
-                            ('out_files', 'inputnode.bold_split')
-                        ])
-                    ])
 
     # SURFACES ##################################################################################
     # Freesurfer
@@ -986,50 +931,34 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ('t1w2fsnative_xfm', 'inputnode.t1w2fsnative_xfm')]),
             (bold_t1_trans_wf, bold_surf_wf, [('outputnode.bold_t1', 'inputnode.source_file')]),
             (bold_surf_wf, outputnode, [('outputnode.surfaces', 'surfaces')]),
+            (bold_surf_wf, func_derivatives_wf, [
+                ('outputnode.target', 'inputnode.surf_refs')]),
         ])
 
-    # CIFTI output
-    if cifti_output:
-        from niworkflows.interfaces.cifti import GenerateCifti
-        bold_surf_wf.__desc__ += """\
-*Grayordinates* files [@hcppipelines], which combine surface-sampled
-data and volume-sampled data, were also generated.
-"""
-        select_std = pe.Node(KeySelect(fields=['bold_std'], no_hash=True),
-                             name='select_std', run_without_submitting=True)
-        select_std.inputs.key = "MNI152NLin6Asym"
+        # CIFTI output
+        if cifti_output:
+            from .resampling import init_bold_grayords_wf
+            bold_grayords_wf = init_bold_grayords_wf(
+                grayord_density='91k',
+                mem_gb=mem_gb['resampled'],
+                repetition_time=metadata['RepetitionTime'])
 
-        def _pick_first(tup):
-            return tup[0]
-
-        order_surfs = pe.MapNode(niu.Function(function=_order_surfs,
-                                              output_names=["surface_files"]),
-                                 name='order_surfs', iterfield=['density'],
-                                 run_without_submitting=True)
-        order_surfs.inputs.targets = ('fsLR', )
-
-        gen_cifti = pe.MapNode(GenerateCifti(), iterfield=["surface_bolds", "surface_density"],
-                               name="gen_cifti")
-        gen_cifti.inputs.TR = metadata.get("RepetitionTime")
-        gen_cifti.inputs.surface_target = 'fsLR'  # only supported surface
-
-        workflow.connect([
-            (bold_std_trans_wf, select_std, [
-                ('outputnode.templates', 'keys'),
-                ('outputnode.bold_std', 'bold_std')]),
-            (bold_surf_wf, order_surfs, [('outputnode.surfaces', 'surface_bolds'),
-                                         ('outputnode.fslr_density', 'density')]),
-            (bold_surf_wf, gen_cifti, [('outputnode.fslr_density', 'surface_density')]),
-            (order_surfs, gen_cifti, [('surface_files', 'surface_bolds')]),
-            (inputnode, gen_cifti, [('subjects_dir', 'subjects_dir')]),
-            (select_std, gen_cifti, [
-                ('bold_std', 'bold_file'),
-                (('key', _pick_first), 'volume_target')]),
-            (gen_cifti, outputnode, [('out_file', 'bold_cifti'),
-                                     ('variant', 'cifti_variant'),
-                                     ('out_metadata', 'cifti_metadata'),
-                                     ('density', 'cifti_density')]),
-        ])
+            workflow.connect([
+                (inputnode, bold_grayords_wf, [
+                    ('subjects_dir', 'inputnode.subjects_dir')]),
+                (bold_std_trans_wf, bold_grayords_wf, [
+                    ('outputnode.bold_std', 'inputnode.bold_std'),
+                    ('outputnode.spatial_reference', 'inputnode.spatial_reference')]),
+                (bold_surf_wf, bold_grayords_wf, [
+                    ('outputnode.surfaces', 'inputnode.surf_files'),
+                    ('outputnode.target', 'inputnode.surf_refs'),
+                ]),
+                (bold_grayords_wf, outputnode, [
+                    ('outputnode.cifti_bold', 'bold_cifti'),
+                    ('outputnode.cifti_variant', 'cifti_variant'),
+                    ('outputnode.cifti_metadata', 'cifti_metadata'),
+                    ('outputnode.cifti_density', 'cifti_density')]),
+            ])
 
     # REPORTING ############################################################
     ds_report_summary = pe.Node(
@@ -1109,16 +1038,3 @@ def _to_join(in_file, join_file):
         return in_file
     res = JoinTSVColumns(in_file=in_file, join_file=join_file).run()
     return res.outputs.out_file
-
-
-def _order_surfs(targets, surface_bolds, density=None):
-    """Reorder list of surface_files into [L,R] sub-lists"""
-    surface_files = []
-    targets = targets if 'fsLR' not in targets else ('fsLR',)
-    for target in targets:
-        surface_files.extend(
-            [f for f in surface_bolds
-             if '{target}.{density}'.format(target=target, density=density or '')
-             in f]
-        )
-    return surface_files

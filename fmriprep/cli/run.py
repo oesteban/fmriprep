@@ -1,10 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""
-fMRI preprocessing workflow
-=====
-"""
+"""fMRI preprocessing workflow."""
 
 import os
 import re
@@ -39,10 +35,10 @@ def check_deps(workflow):
 
 def get_parser():
     """Build parser object."""
-    from niworkflows.utils.spaces import Space, SpatialReferences, OutputSpacesAction
     from packaging.version import Version
     from ..__about__ import __version__
     from .version import check_latest, is_flagged
+    from ..utils.spaces import Space, SpacesManager, SpacesManagerAction
 
     verstr = 'fMRIPrep v{}'.format(__version__)
     currentv = Version(__version__)
@@ -127,7 +123,7 @@ def get_parser():
              'option is not enabled, standard EPI-T1 coregistration is performed '
              'using the middle echo.')
     g_conf.add_argument(
-        '--output-spaces', nargs='+', action=OutputSpacesAction, default=SpatialReferences(),
+        '--output-spaces', nargs='+', action=SpacesManagerAction, default=SpacesManager(),
         help="""\
 Standard and non-standard spaces to resample anatomical and functional images to. \
 Standard spaces may be specified by the form \
@@ -224,7 +220,7 @@ https://fmriprep.readthedocs.io/en/%s/spaces.html""" % currentv.base_version
                          help='disable sub-millimeter (hires) reconstruction')
     g_surfs_xor = g_surfs.add_mutually_exclusive_group()
     g_surfs_xor.add_argument('--cifti-output', nargs='?', const='91k', default=False,
-                             choices=('91k', '170k'),
+                             choices=('91k', '170k'), type=str,
                              help='output preprocessed BOLD as a CIFTI dense timeseries. '
                              'Optionally, the number of grayordinate can be specified '
                              '(default is 91k, which equates to 2mm resolution)')
@@ -697,24 +693,23 @@ def parse_spaces(opts):
 
     """
     spaces = opts.output_spaces
+    spaces.snap()
 
     if opts.use_aroma:
         # Make sure there's a normalization to FSL for AROMA to use.
-        spaces.add('MNI152NLin6Asym')
+        spaces.add(('MNI152NLin6Asym', {'res': '2'}))
 
     if opts.cifti_output:
-        grayords = {  # CIFTI grayordinates to corresponding fsLR densities
-            '91k': '32k',
-            '170k': '59k'
-        }
-        spaces.add(('fsLR', {'den': grayords[opts.cifti_output]}))
-        spaces.add('MNI152NLin6Asym')
+        # CIFTI grayordinates to corresponding FSL-MNI resolutions.
+        vol_res = '32'[opts.cifti_output == '91k']
+        spaces.add(('fsaverage', {'den': '164k'}))
+        spaces.add(('MNI152NLin6Asym', {'res': vol_res}))
 
     # These arguments implicitly signal expected output
     if not spaces.spaces:
         warnings.warn(
             "fMRIPrep will not generate preprocessed derivatives because "
-            "non of `--output-spaces`, `--use-aroma`, or `--cifti-output` "
+            "none of `--output-spaces`, `--use-aroma`, or `--cifti-output` "
             "were set."
         )
 

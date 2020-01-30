@@ -66,7 +66,7 @@ def init_func_derivatives_wf(
         'bold_std_ref', 'bold_t1', 'bold_t1_ref', 'bold_native', 'bold_native_ref',
         'bold_mask_native', 'cifti_variant', 'cifti_metadata', 'cifti_density',
         'confounds', 'confounds_metadata', 'melodic_mix', 'nonaggr_denoised_file',
-        'source_file', 'surfaces', 'template']),
+        'source_file', 'surf_files', 'surf_refs', 'template', 'spatial_reference']),
         name='inputnode')
 
     raw_sources = pe.Node(niu.Function(function=_bids_relative), name='raw_sources')
@@ -156,46 +156,68 @@ def init_func_derivatives_wf(
                                                ('bold_aparc_t1', 'in_file')]),
             ])
 
-    # Resample to template
-    # TODO: OE revise
-    volume_std_spaces = False
-    surface_spaces = False
+    if use_aroma:
+        ds_aroma_noise_ics = pe.Node(DerivativesDataSink(
+            base_directory=output_dir, suffix='AROMAnoiseICs'),
+            name="ds_aroma_noise_ics", run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_melodic_mix = pe.Node(DerivativesDataSink(
+            base_directory=output_dir, desc='MELODIC', suffix='mixing'),
+            name="ds_melodic_mix", run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_aroma_std = pe.Node(
+            DerivativesDataSink(base_directory=output_dir, space='MNI152NLin6Asym',
+                                desc='smoothAROMAnonaggr', keep_dtype=True),
+            name='ds_aroma_std', run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    if volume_std_spaces:
-        select_std = pe.MapNode(KeySelect(fields=['bold_std', 'bold_std_ref', 'bold_mask_std'],
-                                          no_hash=True),
-                                iterfield=['key'], name='select_std', run_without_submitting=True,
-                                mem_gb=DEFAULT_MEMORY_MIN_GB)
-        select_std.inputs.key = volume_std_spaces
+        workflow.connect([
+            (inputnode, ds_aroma_noise_ics, [('source_file', 'source_file'),
+                                             ('aroma_noise_ics', 'in_file')]),
+            (inputnode, ds_melodic_mix, [('source_file', 'source_file'),
+                                         ('melodic_mix', 'in_file')]),
+            (inputnode, ds_aroma_std, [('source_file', 'source_file'),
+                                       ('nonaggr_denoised_file', 'in_file')]),
+        ])
 
-        ds_bold_std = pe.MapNode(
+    # Store resamplings in standard spaces when listed in --output-spaces
+    if spaces.snapshot:
+        volume_std_spaces = [_gen_ref_name((s.name, s.spec))
+                             for s in spaces.snapshot if s.dim == 3]
+        select_std = pe.Node(KeySelect(
+            fields=['template', 'bold_std', 'bold_std_ref', 'bold_mask_std']),
+            name='select_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
+        select_std.iterables = [('key', volume_std_spaces)]
+
+        ds_bold_std = pe.Node(
             DerivativesDataSink(base_directory=output_dir, desc='preproc',
                                 keep_dtype=True, compress=True, SkullStripped=False,
                                 RepetitionTime=metadata.get('RepetitionTime'),
                                 TaskName=metadata.get('TaskName')),
-            name='ds_bold_std', run_without_submitting=True,
-            iterfield=['space', 'in_file'], mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bold_std_ref = pe.MapNode(
+            name='ds_bold_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_bold_std_ref = pe.Node(
             DerivativesDataSink(base_directory=output_dir, suffix='boldref'),
-            name='ds_bold_std_ref', run_without_submitting=True,
-            iterfield=['space', 'in_file'], mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_bold_mask_std = pe.MapNode(
+            name='ds_bold_std_ref', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_bold_mask_std = pe.Node(
             DerivativesDataSink(base_directory=output_dir, desc='brain',
                                 suffix='mask'),
-            name='ds_bold_mask_std', run_without_submitting=True,
-            iterfield=['space', 'in_file'], mem_gb=DEFAULT_MEMORY_MIN_GB)
+            name='ds_bold_mask_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         workflow.connect([
             (inputnode, select_std, [('bold_std', 'bold_std'),
                                      ('bold_std_ref', 'bold_std_ref'),
                                      ('bold_mask_std', 'bold_mask_std'),
-                                     ('template', 'keys')]),
+                                     ('template', 'template'),
+                                     ('spatial_reference', 'keys')]),
             (select_std, ds_bold_std, [('bold_std', 'in_file'),
-                                       ('key', 'space')]),
+                                       (('template', _get_space), 'space'),
+                                       (('template', _get_cohort), 'cohort')]),
             (select_std, ds_bold_std_ref, [('bold_std_ref', 'in_file'),
-                                           ('key', 'space')]),
+                                           (('template', _get_space), 'space'),
+                                           (('template', _get_cohort), 'cohort')]),
             (select_std, ds_bold_mask_std, [('bold_mask_std', 'in_file'),
-                                            ('key', 'space')]),
+                                            (('template', _get_space), 'space'),
+                                            (('template', _get_cohort), 'cohort')]),
             (inputnode, ds_bold_std, [('source_file', 'source_file')]),
             (inputnode, ds_bold_std_ref, [('source_file', 'source_file')]),
             (inputnode, ds_bold_mask_std, [('source_file', 'source_file')]),
@@ -203,49 +225,47 @@ def init_func_derivatives_wf(
         ])
 
         if freesurfer:
-            select_fs_std = pe.MapNode(KeySelect(fields=['bold_aseg_std', 'bold_aparc_std']),
-                                       iterfield=['key'], name='select_fs_std',
-                                       run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
-            select_fs_std.inputs.key = volume_std_spaces
+            select_fs_std = pe.Node(KeySelect(
+                fields=['bold_aseg_std', 'bold_aparc_std', 'template']),
+                name='select_fs_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
+            select_fs_std.iterables = [('key', volume_std_spaces)]
 
-            ds_bold_aseg_std = pe.MapNode(DerivativesDataSink(
+            ds_bold_aseg_std = pe.Node(DerivativesDataSink(
                 base_directory=output_dir, desc='aseg', suffix='dseg'),
                 name='ds_bold_aseg_std', run_without_submitting=True,
-                iterfield=['space', 'in_file'], mem_gb=DEFAULT_MEMORY_MIN_GB)
-            ds_bold_aparc_std = pe.MapNode(DerivativesDataSink(
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
+            ds_bold_aparc_std = pe.Node(DerivativesDataSink(
                 base_directory=output_dir, desc='aparcaseg', suffix='dseg'),
                 name='ds_bold_aparc_std', run_without_submitting=True,
-                iterfield=['space', 'in_file'], mem_gb=DEFAULT_MEMORY_MIN_GB)
+                mem_gb=DEFAULT_MEMORY_MIN_GB)
             workflow.connect([
                 (inputnode, select_fs_std, [('bold_aseg_std', 'bold_aseg_std'),
                                             ('bold_aparc_std', 'bold_aparc_std'),
-                                            ('template', 'keys')]),
+                                            ('template', 'template'),
+                                            ('spatial_reference', 'keys')]),
                 (select_fs_std, ds_bold_aseg_std, [('bold_aseg_std', 'in_file'),
-                                                   ('key', 'space')]),
+                                                   (('template', _get_space), 'space'),
+                                                   (('template', _get_cohort), 'cohort')]),
                 (select_fs_std, ds_bold_aparc_std, [('bold_aparc_std', 'in_file'),
-                                                    ('key', 'space')]),
+                                                    (('template', _get_space), 'space'),
+                                                    (('template', _get_cohort), 'cohort')]),
                 (inputnode, ds_bold_aseg_std, [('source_file', 'source_file')]),
                 (inputnode, ds_bold_aparc_std, [('source_file', 'source_file')])
             ])
 
-    if freesurfer and surface_spaces:
-
-        filter_surfaces = pe.Node(niu.Function(function=_filter_surfaces),
-                                  name='filter_surfaces',
-                                  #  iterfield=['space', 'density'],
-                                  mem_gb=DEFAULT_MEMORY_MIN_GB, run_with_submitting=True)
-        filter_surfaces.iterables = [('space', [space for space, _ in surface_spaces]),
-                                     ('density', [spec.get('den') for _, spec in surface_spaces])]
-        filter_surfaces.synchronize = True
-
-        extract_surf_info = pe.MapNode(niu.Function(function=_extract_surf_info),
-                                       iterfield=['in_file'], name='extract_surf_info',
-                                       mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True)
+    fs_outputs = [s for s in spaces.snapshot if s.name in ('fsaverage', 'fsnative')]
+    if freesurfer and fs_outputs:
+        select_fs_surf = pe.Node(KeySelect(
+            fields=['surfaces', 'surf_kwargs']), name='select_fs_surf',
+            run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
+        select_fs_surf.iterables = [('key', [s.legacyname or s.name for s in fs_outputs])]
+        select_fs_surf.inputs.surf_kwargs = [{'space': s.legacyname or s.name}
+                                             for s in fs_outputs]
 
         name_surfs = pe.MapNode(GiftiNameSource(
             pattern=r'(?P<LR>[lr])h.\w+',
-            template='space-{space}{den}_hemi-{LR}.func'),
-            iterfield=['in_file', 'template_kwargs'], name='name_surfs',
+            template='space-{space}_hemi-{LR}.func'),
+            iterfield=['in_file'], name='name_surfs',
             mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True)
 
         ds_bold_surfs = pe.MapNode(DerivativesDataSink(base_directory=output_dir),
@@ -254,12 +274,13 @@ def init_func_derivatives_wf(
                                    mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         workflow.connect([
-            (inputnode, filter_surfaces, [('surfaces', 'surface_files')]),
-            (filter_surfaces, extract_surf_info, [('out', 'in_file')]),
-            (filter_surfaces, name_surfs, [('out', 'in_file')]),
-            (extract_surf_info, name_surfs, [('out', 'template_kwargs')]),
+            (inputnode, select_fs_surf, [
+                ('surf_files', 'surfaces'),
+                ('surf_refs', 'keys')]),
+            (select_fs_surf, name_surfs, [('surfaces', 'in_file'),
+                                          ('surf_kwargs', 'template_kwargs')]),
             (inputnode, ds_bold_surfs, [('source_file', 'source_file')]),
-            (filter_surfaces, ds_bold_surfs, [('out', 'in_file')]),
+            (select_fs_surf, ds_bold_surfs, [('surfaces', 'in_file')]),
             (name_surfs, ds_bold_surfs, [('out_name', 'suffix')]),
         ])
 
@@ -287,50 +308,25 @@ def init_func_derivatives_wf(
                                     ('cifti_metadata', 'in_file')]),
         ])
 
-    if use_aroma:
-        ds_aroma_noise_ics = pe.Node(DerivativesDataSink(
-            base_directory=output_dir, suffix='AROMAnoiseICs'),
-            name="ds_aroma_noise_ics", run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_melodic_mix = pe.Node(DerivativesDataSink(
-            base_directory=output_dir, desc='MELODIC', suffix='mixing'),
-            name="ds_melodic_mix", run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_aroma_std = pe.Node(
-            DerivativesDataSink(base_directory=output_dir, space='MNI152NLin6Asym',
-                                desc='smoothAROMAnonaggr', keep_dtype=True),
-            name='ds_aroma_std', run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB)
-
-        workflow.connect([
-            (inputnode, ds_aroma_noise_ics, [('source_file', 'source_file'),
-                                             ('aroma_noise_ics', 'in_file')]),
-            (inputnode, ds_melodic_mix, [('source_file', 'source_file'),
-                                         ('melodic_mix', 'in_file')]),
-            (inputnode, ds_aroma_std, [('source_file', 'source_file'),
-                                       ('nonaggr_denoised_file', 'in_file')]),
-        ])
-
     return workflow
 
 
-def _filter_surfaces(surface_files, space, density=None):
-    import os
-    output_surfaces = [
-        fl for fl in surface_files
-        if "{space}.{density}".format(space=space, density=density or '')
-        in os.path.basename(fl)
-    ]
-    return output_surfaces
+def _gen_ref_name(in_tuple):
+    return '_'.join(['space-%s' % in_tuple[0].split(':')[0]] + [
+        '-'.join(item) for item in in_tuple[1].items()])
 
 
-def _extract_surf_info(in_file):
-    import os
-    info = {'den': ''}
-    splits = os.path.basename(in_file).split('.')
-    if not 4 >= len(splits[:3]) >= 3:
-        raise IndexError("Invalid filename")
-    info['space'] = splits[1]
-    if len(splits) == 4:
-        info['den'] = '_den-{}'.format(splits[2])
-    return info
+def _get_space(in_tuple):
+    return in_tuple[0].split(':')[0]
+
+
+def _get_resolution(in_tuple):
+    return in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
+
+
+def _get_cohort(in_tuple):
+    return in_tuple[1].get('cohort', None)
+
+
+def _get_density(in_tuple):
+    return in_tuple[1].get('den', None) or in_tuple[1].get('density', None)

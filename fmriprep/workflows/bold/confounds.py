@@ -643,7 +643,7 @@ in the corresponding confounds file.
             'movpar_file',
             'name_source',
             'skip_vols',
-            'templates',
+            'spatial_reference',
         ]), name='inputnode')
 
     outputnode = pe.Node(niu.IdentityInterface(
@@ -651,10 +651,9 @@ in the corresponding confounds file.
                 'nonaggr_denoised_file', 'aroma_metadata']), name='outputnode')
 
     # extract out to BOLD base
-    select_std = pe.Node(KeySelect(
-        fields=['bold_mask_std', 'bold_std']),
-        name='select_std', run_without_submitting=True, no_hash=True)
-    select_std.inputs.key = 'MNI152NLin6Asym'
+    select_std = pe.Node(KeySelect(fields=['bold_mask_std', 'bold_std']),
+                         name='select_std', run_without_submitting=True)
+    select_std.inputs.key = 'space-MNI152NLin6Asym_res-2'
 
     rm_non_steady_state = pe.Node(niu.Function(function=_remove_volumes,
                                                output_names=['bold_cut']),
@@ -705,7 +704,7 @@ in the corresponding confounds file.
 
     # connect the nodes
     workflow.connect([
-        (inputnode, select_std, [('templates', 'keys'),
+        (inputnode, select_std, [('spatial_reference', 'keys'),
                                  ('bold_std', 'bold_std'),
                                  ('bold_mask_std', 'bold_mask_std')]),
         (inputnode, ica_aroma, [('movpar_file', 'motion_parameters')]),

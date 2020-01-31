@@ -173,7 +173,7 @@ def init_bold_std_trans_wf(
     spaces,
     name='bold_std_trans_wf',
     use_compression=True,
-    use_fieldwarp=False
+    use_fieldwarp=False,
 ):
     """
     Sample fMRI into standard space with a single-step resampling of the original BOLD series.
@@ -270,21 +270,21 @@ def init_bold_std_trans_wf(
 
     """
     workflow = Workflow(name=name)
+    std_vol_references = [(s.fullname, s.spec) for s in spaces.get_std_spaces(only_names=False)
+                          if s.dim == 3]
+    output_references = [s.fullname for s in spaces.snapshot if s.dim == 3 and s.standard]
 
-    vol_references = [
-        (s.fullname, s.spec) for s in spaces.snapshot if s.dim == 3
-    ]
-    if len(vol_references) == 1:
+    if len(output_references) == 1:
         workflow.__desc__ = """\
 The BOLD time-series were resampled into standard space,
 generating a *preprocessed BOLD run in {tpl} space*.
-""".format(tpl=vol_references[0][0])
-    elif len(vol_references) > 1:
+""".format(tpl=output_references[0])
+    elif len(output_references) > 1:
         workflow.__desc__ = """\
 The BOLD time-series were resampled into several standard spaces,
 correspondingly generating the following *spatially-normalized,
 preprocessed BOLD runs*: {tpl}.
-""".format(tpl=', '.join([s for s, _ in vol_references]))
+""".format(tpl=', '.join(output_references))
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=[
@@ -303,7 +303,7 @@ preprocessed BOLD runs*: {tpl}.
         name='inputnode'
     )
     # Generate conversions for every template+spec at the input
-    inputnode.iterables = [('std_target', vol_references)]
+    inputnode.iterables = [('std_target', std_vol_references)]
 
     # Connect output nodes
     output_names = [

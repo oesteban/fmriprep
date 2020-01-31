@@ -84,7 +84,7 @@ jobs:
             THISVERSION=${CIRCLE_TAG:-$THISVERSION}
             DOCKERVERSION=$(docker run --rm -it poldracklab/fmriprep:latest --version)
             DOCKERVERSION=${DOCKERVERSION%$'\r'}
-            DOCKERVERSION=${DOCKERVERSION#*"fmriprep v"}
+            DOCKERVERSION=${DOCKERVERSION#*"fMRIPrep v"}
             echo "VERSION: \"$THISVERSION\""
             echo "DOCKERVERSION: \"${DOCKERVERSION}\""
             test "$DOCKERVERSION" = "$THISVERSION"
@@ -814,7 +814,7 @@ jobs:
             which fmriprep | grep sdist\\/bin
             INSTALLED_VERSION=$(fmriprep --version)
             INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
-            INSTALLED_VERSION=${INSTALLED_VERSION#*"fmriprep v"}
+            INSTALLED_VERSION=${INSTALLED_VERSION#*"fMRIPrep v"}
             echo "VERSION: \"$THISVERSION\""
             echo "INSTALLED: \"$INSTALLED_VERSION\""
             test "$INSTALLED_VERSION" = "$THISVERSION"
@@ -831,7 +831,7 @@ jobs:
             which fmriprep | grep wheel\\/bin
             INSTALLED_VERSION=$(fmriprep --version)
             INSTALLED_VERSION=${INSTALLED_VERSION%$'\r'}
-            INSTALLED_VERSION=${INSTALLED_VERSION#*"fmriprep v"}
+            INSTALLED_VERSION=${INSTALLED_VERSION#*"fMRIPrep v"}
             echo "VERSION: \"$THISVERSION\""
             echo "INSTALLED: \"$INSTALLED_VERSION\""
             test "$INSTALLED_VERSION" = "$THISVERSION"

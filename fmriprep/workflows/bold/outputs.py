@@ -186,7 +186,7 @@ def init_func_derivatives_wf(
     # Store resamplings in standard spaces when listed in --output-spaces
     if spaces.snapshot:
         volume_std_spaces = [_gen_ref_name((s.name, s.spec))
-                             for s in spaces.snapshot if s.dim == 3]
+                             for s in spaces.snapshot if s.dim == 3 and s.standard]
         select_std = pe.Node(KeySelect(
             fields=['template', 'bold_std', 'bold_std_ref', 'bold_mask_std']),
             name='select_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)

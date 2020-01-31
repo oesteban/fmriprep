@@ -546,7 +546,7 @@ EPI sampled to FreeSurfer surfaces
     from fmriprep.workflows.bold import init_bold_surf_wf
     wf = init_bold_surf_wf(
         mem_gb=1,
-        surface_spaces=[('fsnative', {}), ('fsaverage5', {}), ('fsLR', {'den': '32k'})],
+        surface_spaces=['fsnative', 'fsaverage5'],
         medial_surface_nan=False)
 
 If FreeSurfer processing is enabled, the motion-corrected functional series

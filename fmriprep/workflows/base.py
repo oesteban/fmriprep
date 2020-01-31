@@ -85,8 +85,17 @@ def init_fmriprep_wf(
             from collections import namedtuple, OrderedDict
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
             from fmriprep.workflows.base import init_fmriprep_wf
-            from niworkflows.utils.spaces import Space, SpatialReferences
+            from niworkflows.utils.spaces import Space
+            from fmriprep.utils.spaces import SpacesManager
+
             os.environ['FREESURFER_HOME'] = os.getcwd()
+            spaces = SpacesManager([
+                ('MNI152Lin',),
+                ('fsaverage', {'density': '10k'}),
+                ('T1w',),
+                ('fsnative',)
+            ])
+            spaces.snap()
             wf = init_fmriprep_wf(
                 anat_only=False,
                 aroma_melodic_dim=-200,
@@ -114,11 +123,8 @@ def init_fmriprep_wf(
                 regressors_fd_th=0.5,
                 run_uuid='X',
                 skull_strip_fixed_seed=False,
-                skull_strip_template=Space.from_string('OASIS30ANTs')[0],
-                spaces=SpatialReferences([('MNI152Lin',),
-                                          ('fsaverage', {'density': '10k'}),
-                                          ('T1w',),
-                                          ('fsnative',)]),
+                skull_strip_template=Space('OASIS30ANTs', {}),
+                spaces=spaces,
                 subject_list=['fmripreptest'],
                 t2s_coreg=False,
                 task_id='',
@@ -185,7 +191,7 @@ def init_fmriprep_wf(
     skull_strip_fixed_seed : bool
         Do not use a random seed for skull-stripping - will ensure
         run-to-run replicability when used with --omp-nthreads 1
-    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
+    spaces : :py:class:`~fmriprep.utils.spaces.SpacesManager`
         Organize and filter spatial normalizations. Composed of internal and output lists
         of spaces in the form of (Template, Specs). `Template` is a string of either
         TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
@@ -329,10 +335,19 @@ def init_single_subject_wf(
             :graph2use: orig
             :simple_form: yes
 
+            from collections import namedtuple
+            from niworkflows.utils.spaces import Space
+            from fmriprep.utils.spaces import SpacesManager
             from fmriprep.workflows.base import init_single_subject_wf
-            from fmriprep.utils import Spaces
-            from collections import namedtuple, OrderedDict
+
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
+            spaces = SpacesManager([
+                ('MNI152Lin',),
+                ('fsaverage', {'density': '10k'}),
+                ('T1w',),
+                ('fsnative',)
+            ])
+            spaces.snap()
             wf = init_single_subject_wf(
                 anat_only=False,
                 aroma_melodic_dim=-200,
@@ -360,11 +375,8 @@ def init_single_subject_wf(
                 regressors_dvars_th=1.5,
                 regressors_fd_th=0.5,
                 skull_strip_fixed_seed=False,
-                skull_strip_template=('OASIS30ANTs', {}),
-                spaces=Spaces(output=[('MNI152Lin', {}),
-                                      ('fsaverage', {'density': '10k'}),
-                                      ('T1w', {}),
-                                      ('fsnative', {})]),
+                skull_strip_template=Space('OASIS30ANTs', {}),
+                spaces=spaces,
                 subject_id='test',
                 t2s_coreg=False,
                 task_id='',
@@ -438,7 +450,7 @@ def init_single_subject_wf(
         List of subject labels
     t2s_coreg : bool
         For multi-echo EPI, use the calculated T2*-map for T2*-driven coregistration
-    spaces : :obj:`Spaces`
+    spaces : :py:class:`~fmriprep.utils.spaces.SpacesManager`
         Organize and filter spatial normalizations. Composed of internal and output lists
         of spaces in the form of (Template, Specs). `Template` is a string of either
         TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or

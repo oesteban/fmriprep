@@ -325,7 +325,7 @@ def _get_resolution(in_tuple):
 
 
 def _get_extra(in_tuple):
-    from nipype.interfaces.base import _Undefined
+    from nipype.interfaces.base.traits_extension import _Undefined
     elems = []
     if in_tuple[1].get('cohort'):
         elems.append('cohort-%s' % in_tuple[1].get('cohort'))

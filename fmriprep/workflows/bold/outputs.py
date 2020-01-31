@@ -211,13 +211,13 @@ def init_func_derivatives_wf(
                                      ('spatial_reference', 'keys')]),
             (select_std, ds_bold_std, [('bold_std', 'in_file'),
                                        (('template', _get_space), 'space'),
-                                       (('template', _get_cohort), 'cohort')]),
+                                       (('template', _get_extra), 'extra_values')]),
             (select_std, ds_bold_std_ref, [('bold_std_ref', 'in_file'),
                                            (('template', _get_space), 'space'),
-                                           (('template', _get_cohort), 'cohort')]),
+                                           (('template', _get_extra), 'extra_values')]),
             (select_std, ds_bold_mask_std, [('bold_mask_std', 'in_file'),
                                             (('template', _get_space), 'space'),
-                                            (('template', _get_cohort), 'cohort')]),
+                                            (('template', _get_extra), 'extra_values')]),
             (inputnode, ds_bold_std, [('source_file', 'source_file')]),
             (inputnode, ds_bold_std_ref, [('source_file', 'source_file')]),
             (inputnode, ds_bold_mask_std, [('source_file', 'source_file')]),
@@ -245,10 +245,10 @@ def init_func_derivatives_wf(
                                             ('spatial_reference', 'keys')]),
                 (select_fs_std, ds_bold_aseg_std, [('bold_aseg_std', 'in_file'),
                                                    (('template', _get_space), 'space'),
-                                                   (('template', _get_cohort), 'cohort')]),
+                                                   (('template', _get_extra), 'extra_values')]),
                 (select_fs_std, ds_bold_aparc_std, [('bold_aparc_std', 'in_file'),
                                                     (('template', _get_space), 'space'),
-                                                    (('template', _get_cohort), 'cohort')]),
+                                                    (('template', _get_extra), 'extra_values')]),
                 (inputnode, ds_bold_aseg_std, [('source_file', 'source_file')]),
                 (inputnode, ds_bold_aparc_std, [('source_file', 'source_file')])
             ])
@@ -324,8 +324,17 @@ def _get_resolution(in_tuple):
     return in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
 
 
-def _get_cohort(in_tuple):
-    return in_tuple[1].get('cohort', None)
+def _get_extra(in_tuple):
+    from nipype.interfaces.base import _Undefined
+    elems = []
+    if in_tuple[1].get('cohort'):
+        elems.append('cohort-%s' % in_tuple[1].get('cohort'))
+    res = in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
+    if res:
+        elems.append('res-%s' % res)
+    if elems:
+        return ['_'.join(elems)]
+    return _Undefined
 
 
 def _get_density(in_tuple):

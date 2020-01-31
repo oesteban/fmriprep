@@ -270,8 +270,8 @@ def init_bold_std_trans_wf(
 
     """
     workflow = Workflow(name=name)
-    std_vol_references = [(s.fullname, s.spec) for s in spaces.get_std_spaces(only_names=False)
-                          if s.dim == 3]
+    std_vol_references = [(s.fullname, s.spec) for s in
+                          spaces.get_std_spaces(only_names=False, dim=(3,))]
     output_references = [s.fullname for s in spaces.snapshot if s.dim == 3 and s.standard]
 
     if len(output_references) == 1:

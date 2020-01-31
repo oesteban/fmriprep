@@ -273,7 +273,7 @@ def init_bold_std_trans_wf(
     workflow = Workflow(name=name)
 
     vol_references = [
-        (s.fullname, s.spec) for s in std_references.get_templates(dim=(3,))
+        (s.fullname, s.spec) for s in std_references.snapshot if s.dim == 3
     ]
     if len(vol_references) == 1:
         workflow.__desc__ = """\
@@ -790,12 +790,24 @@ def _gen_ref_name(in_tuple):
 def _select_template(template):
     from niworkflows.utils.misc import get_template_specs
     template, specs = template
+    specs = specs.copy()
+    specs['suffix'] = specs.get('suffix', 'T1w')
 
     # Sanitize resolution
     res = specs.pop('res', None) or specs.pop('resolution', None) or 'native'
-    specs['resolution'] = {'native': 2}.get(res) or res
-    specs['suffix'] = specs.get('suffix', 'T1w')
-    return get_template_specs(template, template_spec=specs)[0]
+    if res != 'native':
+        specs['resolution'] = res
+        return get_template_specs(template, template_spec=specs)[0]
+
+    # Map nonstandard resolutions to existing resolutions
+    specs['resolution'] = 2
+    try:
+        out = get_template_specs(template, template_spec=specs)
+    except RuntimeError:
+        specs['resolution'] = 1
+        out = get_template_specs(template, template_spec=specs)
+
+    return out[0]
 
 
 def _first(inlist):

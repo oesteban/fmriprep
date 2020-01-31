@@ -943,7 +943,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
         if cifti_output:
             from .resampling import init_bold_grayords_wf
             bold_grayords_wf = init_bold_grayords_wf(
-                grayord_density='91k',
+                grayord_density=cifti_output,
                 mem_gb=mem_gb['resampled'],
                 repetition_time=metadata['RepetitionTime'])
 

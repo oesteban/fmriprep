@@ -134,8 +134,8 @@ Non-standard spaces imply specific orientations and sampling grids. \
 Important to note, the ``res-*`` modifier does not define the resolution used for \
 the spatial normalization.
 For further details, please check out \
-https://fmriprep.readthedocs.io/en/%s/spaces.html""" % currentv.base_version
-        if is_release else 'latest')
+https://fmriprep.readthedocs.io/en/%s/spaces.html""" % (currentv.base_version
+        if is_release else 'latest'))
 
     g_conf.add_argument('--bold2t1w-dof', action='store', default=6, choices=[6, 9, 12], type=int,
                         help='Degrees of freedom when registering BOLD to T1w images. '
@@ -701,7 +701,7 @@ def parse_spaces(opts):
 
     if opts.cifti_output:
         # CIFTI grayordinates to corresponding FSL-MNI resolutions.
-        vol_res = '32'[opts.cifti_output == '91k']
+        vol_res = '2' if opts.cifti_output == '91k' else '3'
         spaces.add(('fsaverage', {'den': '164k'}))
         spaces.add(('MNI152NLin6Asym', {'res': vol_res}))
 

@@ -39,7 +39,7 @@ def init_func_derivatives_wf(
         Metadata dictionary associated to the BOLD run.
     output_dir : str
         Where derivatives should be written out to.
-    spaces : :obj:`Spaces`
+    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
         Organize and filter spatial normalizations. Composed of internal and output lists
         of spaces in the form of (Template, Specs). `Template` is a string of either
         TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
@@ -179,6 +179,9 @@ def init_func_derivatives_wf(
             (inputnode, ds_aroma_std, [('source_file', 'source_file'),
                                        ('nonaggr_denoised_file', 'in_file')]),
         ])
+
+    if not hasattr(spaces, 'snapshot'):  # For documentation building purposes
+        return workflow
 
     # Store resamplings in standard spaces when listed in --output-spaces
     if spaces.snapshot:

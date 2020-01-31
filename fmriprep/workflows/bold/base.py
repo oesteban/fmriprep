@@ -85,10 +85,17 @@ def init_func_preproc_wf(
             :graph2use: orig
             :simple_form: yes
 
+            from collections import namedtuple
+            from niworkflows.utils.spaces import Space
+            from fmriprep.utils.spaces import SpacesManager
             from fmriprep.workflows.bold import init_func_preproc_wf
-            from fmriprep.utils import Spaces
-            from collections import namedtuple, OrderedDict
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
+            spaces = SpacesManager([
+                    ('MNI152Lin', {}),
+                    ('fsaverage', {'density': '10k'}),
+                    ('T1w', {}),
+                    ('fsnative', {})])
+            spaces.snap()
             wf = init_func_preproc_wf(
                 aroma_melodic_dim=-200,
                 bold2t1w_dof=9,
@@ -110,10 +117,7 @@ def init_func_preproc_wf(
                 regressors_dvars_th=1.5,
                 regressors_fd_th=0.5,
                 reportlets_dir='.',
-                spaces=Spaces(output=[('MNI152Lin', {}),
-                                      ('fsaverage', {'density': '10k'}),
-                                      ('T1w', {}),
-                                      ('fsnative', {})]),
+                spaces=spaces,
                 t2s_coreg=False,
                 use_aroma=False,
                 use_bbr=True,
@@ -166,7 +170,7 @@ def init_func_preproc_wf(
         Criterion for flagging framewise displacement outliers
     reportlets_dir : str
         Absolute path of a directory in which reportlets will be temporarily stored
-    spaces : :obj:`Spaces`
+    spaces : py:class:`~fmriprep.utils.spaces.SpacesManager`
         Organize and filter spatial normalizations. Composed of internal and output lists
         of spaces in the form of (Template, Specs). `Template` is a string of either
         TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
@@ -772,7 +776,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
             freesurfer=freesurfer,
             mem_gb=mem_gb['resampled'],
             omp_nthreads=omp_nthreads,
-            std_references=spaces,
+            spaces=spaces,
             name='bold_std_trans_wf',
             use_compression=not low_mem,
             use_fieldwarp=bool(fmaps),

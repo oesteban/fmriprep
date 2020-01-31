@@ -54,8 +54,7 @@ def init_bold_surf_wf(
 
             from fmriprep.workflows.bold import init_bold_surf_wf
             wf = init_bold_surf_wf(mem_gb=0.1,
-                                   surface_spaces=['T1w', 'fsnative',
-                                                  'template', 'fsaverage5'],
+                                   surface_spaces=['fsnative', 'fsaverage5'],
                                    medial_surface_nan=False)
 
     Parameters
@@ -171,7 +170,7 @@ def init_bold_std_trans_wf(
     freesurfer,
     mem_gb,
     omp_nthreads,
-    std_references,
+    spaces,
     name='bold_std_trans_wf',
     use_compression=True,
     use_fieldwarp=False
@@ -192,16 +191,18 @@ def init_bold_std_trans_wf(
             :graph2use: colored
             :simple_form: yes
 
-            from collections import OrderedDict
+            from fmriprep.utils.spaces import SpacesManager
             from fmriprep.workflows.bold import init_bold_std_trans_wf
+            spaces = SpacesManager([
+                ('MNI152Lin', {}),
+                ('MNIPediatricAsym', {'cohort': '6'}),
+            ])
+            spaces.snap()
             wf = init_bold_std_trans_wf(
                 freesurfer=True,
                 mem_gb=3,
                 omp_nthreads=1,
-                std_references=[
-                    ('MNI152Lin', {}),
-                    ('MNIPediatricAsym', {'cohort': '6'}),
-                ]),
+                spaces=spaces,
             )
 
     Parameters
@@ -212,10 +213,8 @@ def init_bold_std_trans_wf(
         Size of BOLD file in GB
     omp_nthreads : int
         Maximum number of threads an individual process may use
-    std_references : :obj:`list` of :obj:`tuple`
-        List of tuple pairs where the first element is a TemplateFlow ID string (e.g.,
-        ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``),
-        and the second is a specification dictionary.
+    spaces : py:class:`~fmriprep.utils.spaces.SpacesManager`
+        Spaces manager object, which has been snapshotted.
     name : str
         Name of workflow (default: ``bold_std_trans_wf``)
     use_compression : bool
@@ -273,7 +272,7 @@ def init_bold_std_trans_wf(
     workflow = Workflow(name=name)
 
     vol_references = [
-        (s.fullname, s.spec) for s in std_references.snapshot if s.dim == 3
+        (s.fullname, s.spec) for s in spaces.snapshot if s.dim == 3
     ]
     if len(vol_references) == 1:
         workflow.__desc__ = """\

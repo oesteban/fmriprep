@@ -18,10 +18,18 @@ is presented below:
     :graph2use: orig
     :simple_form: yes
 
+    from collections import namedtuple
+    from niworkflows.utils.spaces import Space
+    from fmriprep.utils.spaces import SpacesManager
     from fmriprep.workflows.base import init_single_subject_wf
-    from fmriprep.utils import Spaces
-    from collections import namedtuple, OrderedDict
     BIDSLayout = namedtuple('BIDSLayout', ['root'])
+    spaces = SpacesManager([
+        ('MNI152Lin', {}),
+        ('fsaverage', {'density': '10k'}),
+        ('T1w', {}),
+        ('fsnative', {})
+    ])
+    spaces.snap()
     wf = init_single_subject_wf(
         anat_only=False,
         aroma_melodic_dim=-200,
@@ -49,11 +57,8 @@ is presented below:
         regressors_dvars_th=1.5,
         regressors_fd_th=0.5,
         skull_strip_fixed_seed=False,
-        skull_strip_template=('OASIS30ANTs', {}),
-        spaces=Spaces(output=[('MNI152Lin', {}),
-                              ('fsaverage', {'density': '10k'}),
-                              ('T1w', {}),
-                              ('fsnative', {})]),
+        skull_strip_template=Space('OASIS30ANTs', {}),
+        spaces=spaces,
         subject_id='test',
         t2s_coreg=False,
         task_id='',
@@ -70,9 +75,8 @@ T1w/T2w preprocessing
     :graph2use: orig
     :simple_form: yes
 
-    from collections import OrderedDict
+    from niworkflows.utils.spaces import Space, SpatialReferences
     from fmriprep.workflows.anatomical import init_anat_preproc_wf
-    from fmriprep.utils import Spaces
     wf = init_anat_preproc_wf(
         bids_root='.',
         freesurfer=True,
@@ -81,9 +85,14 @@ T1w/T2w preprocessing
         num_t1w=1,
         omp_nthreads=1,
         output_dir='.',
-        spaces=Spaces(output=[('MNI152NLin2009cAsym', {}), ('fsaverage5', {})]),
+        skull_strip_template=Space('MNI152NLin2009cAsym', {}),
+        spaces=SpatialReferences([
+            ('MNI152Lin', {}),
+            ('fsaverage', {'density': '10k'}),
+            ('T1w', {}),
+            ('fsnative', {})
+        ]),
         reportlets_dir='.',
-        skull_strip_template=('MNI152NLin2009cAsym', {}),
         skull_strip_fixed_seed=False,
     )
 
@@ -281,9 +290,17 @@ BOLD preprocessing
     :graph2use: orig
     :simple_form: yes
 
-    from collections import namedtuple, OrderedDict
+    from collections import namedtuple
+    from niworkflows.utils.spaces import Space
+    from fmriprep.utils.spaces import SpacesManager
     from fmriprep.workflows.bold.base import init_func_preproc_wf
-    from fmriprep.utils import Spaces
+    spaces = SpacesManager([
+        ('MNI152Lin', {}),
+        ('fsaverage', {'density': '10k'}),
+        ('T1w', {}),
+        ('fsnative', {})
+    ])
+    spaces.snap()
     BIDSLayout = namedtuple('BIDSLayout', ['root'])
     wf = init_func_preproc_wf(
         aroma_melodic_dim=-200,
@@ -307,10 +324,7 @@ BOLD preprocessing
         regressors_dvars_th=1.5,
         reportlets_dir='.',
         t2s_coreg=False,
-        spaces=Spaces(output=[('MNI152Lin', {}),
-                              ('fsaverage', {'density': '10k'}),
-                              ('T1w', {}),
-                              ('fsnative', {})]),
+        spaces=spaces,
         use_aroma=False,
         use_bbr=True,
         use_syn=True,
@@ -492,14 +506,18 @@ Resampling BOLD runs onto standard spaces
     :graph2use: colored
     :simple_form: yes
 
-    from collections import OrderedDict
+    from fmriprep.utils.spaces import SpacesManager
     from fmriprep.workflows.bold import init_bold_std_trans_wf
+    spaces = SpacesManager([
+        ('MNI152Lin', {}),
+        ('MNIPediatricAsym', {'cohort': '6'}),
+    ])
+    spaces.snap()
     wf = init_bold_std_trans_wf(
         freesurfer=True,
         mem_gb=3,
         omp_nthreads=1,
-        standard_spaces=OrderedDict([('MNI152Lin', {}),
-                                     ('fsaverage', {'density': '10k'})]),
+        spaces=spaces,
     )
 
 This sub-workflow concatenates the transforms calculated upstream (see

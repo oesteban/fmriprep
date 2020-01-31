@@ -306,6 +306,17 @@ preprocessed BOLD runs*: {tpl}.
     # Generate conversions for every template+spec at the input
     inputnode.iterables = [('std_target', vol_references)]
 
+    # Connect output nodes
+    output_names = [
+        'bold_std', 'bold_std_ref', 'bold_mask_std',
+        'template', 'spatial_reference',
+    ]
+    if freesurfer:
+        output_names += ['bold_aseg_std', 'bold_aparc_std']
+
+    outputnode = pe.JoinNode(niu.IdentityInterface(fields=output_names),
+                             name='outputnode', joinsource='inputnode')
+
     split_target = pe.Node(niu.Function(
         function=_split_spec, input_names=['in_target'], output_names=['name', 'spec']),
         run_without_submitting=True, name='split_target')
@@ -344,7 +355,7 @@ preprocessed BOLD runs*: {tpl}.
         (gen_ref, mask_std_tfm, [('out_file', 'reference_image')]),
     ])
 
-    nxforms = 4 if use_fieldwarp else 3
+    nxforms = [3, 4][use_fieldwarp]
     merge_xforms = pe.Node(niu.Merge(nxforms), name='merge_xforms',
                            run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([(inputnode, merge_xforms, [('hmc_xforms', 'in%d' % nxforms)])])
@@ -374,27 +385,13 @@ preprocessed BOLD runs*: {tpl}.
         (bold_to_std_transform, merge, [('out_files', 'in_files')]),
         (merge, gen_final_ref, [('out_file', 'inputnode.bold_file')]),
         (mask_std_tfm, gen_final_ref, [('output_image', 'inputnode.bold_mask')]),
-    ])
-
-    # Connect output nodes
-    output_names = [
-        'bold_std', 'bold_std_ref', 'bold_mask_std',
-        'template', 'spatial_reference',
-    ]
-    if freesurfer:
-        output_names += ['bold_aseg_std', 'bold_aparc_std']
-
-    # poutputnode - parametric output node
-    poutputnode = pe.Node(niu.IdentityInterface(fields=output_names),
-                          name='poutputnode')
-
-    workflow.connect([
-        (inputnode, poutputnode, [
+        # Connecting outputnode
+        (inputnode, outputnode, [
             (('std_target', _gen_ref_name), 'spatial_reference')]),
-        (gen_final_ref, poutputnode, [('outputnode.ref_image', 'bold_std_ref')]),
-        (merge, poutputnode, [('out_file', 'bold_std')]),
-        (mask_std_tfm, poutputnode, [('output_image', 'bold_mask_std')]),
-        (inputnode, poutputnode, [('std_target', 'template')]),
+        (gen_final_ref, outputnode, [('outputnode.ref_image', 'bold_std_ref')]),
+        (merge, outputnode, [('out_file', 'bold_std')]),
+        (mask_std_tfm, outputnode, [('output_image', 'bold_mask_std')]),
+        (inputnode, outputnode, [('std_target', 'template')]),
     ])
 
     if freesurfer:
@@ -413,17 +410,9 @@ preprocessed BOLD runs*: {tpl}.
             (select_std, aparc_std_tfm, [('anat2std_xfm', 'transforms')]),
             (gen_ref, aseg_std_tfm, [('out_file', 'reference_image')]),
             (gen_ref, aparc_std_tfm, [('out_file', 'reference_image')]),
-            (aseg_std_tfm, poutputnode, [('output_image', 'bold_aseg_std')]),
-            (aparc_std_tfm, poutputnode, [('output_image', 'bold_aparc_std')]),
+            (aseg_std_tfm, outputnode, [('output_image', 'bold_aseg_std')]),
+            (aparc_std_tfm, outputnode, [('output_image', 'bold_aparc_std')]),
         ])
-
-    # Connect outputnode to the parameterized outputnode
-    outputnode = pe.JoinNode(niu.IdentityInterface(fields=output_names),
-                             name='outputnode', joinsource='inputnode')
-    workflow.connect([
-        (poutputnode, outputnode, [(f, f) for f in output_names])
-    ])
-
     return workflow
 
 
@@ -790,6 +779,7 @@ def _gen_ref_name(in_tuple):
 def _select_template(template):
     from niworkflows.utils.misc import get_template_specs
     template, specs = template
+    template = template.split(':')[0]  # Drop any cohort modifier if present
     specs = specs.copy()
     specs['suffix'] = specs.get('suffix', 'T1w')
 

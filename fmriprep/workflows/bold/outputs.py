@@ -213,14 +213,11 @@ def init_func_derivatives_wf(
                                      ('template', 'template'),
                                      ('spatial_reference', 'keys')]),
             (select_std, ds_bold_std, [('bold_std', 'in_file'),
-                                       (('template', _get_space), 'space'),
-                                       (('template', _get_extra), 'extra_values')]),
+                                       (('template', _fmt_space), 'space')]),
             (select_std, ds_bold_std_ref, [('bold_std_ref', 'in_file'),
-                                           (('template', _get_space), 'space'),
-                                           (('template', _get_extra), 'extra_values')]),
+                                           (('template', _fmt_space), 'space')]),
             (select_std, ds_bold_mask_std, [('bold_mask_std', 'in_file'),
-                                            (('template', _get_space), 'space'),
-                                            (('template', _get_extra), 'extra_values')]),
+                                            (('template', _fmt_space), 'space')]),
             (inputnode, ds_bold_std, [('source_file', 'source_file')]),
             (inputnode, ds_bold_std_ref, [('source_file', 'source_file')]),
             (inputnode, ds_bold_mask_std, [('source_file', 'source_file')]),
@@ -247,11 +244,9 @@ def init_func_derivatives_wf(
                                             ('template', 'template'),
                                             ('spatial_reference', 'keys')]),
                 (select_fs_std, ds_bold_aseg_std, [('bold_aseg_std', 'in_file'),
-                                                   (('template', _get_space), 'space'),
-                                                   (('template', _get_extra), 'extra_values')]),
+                                                   (('template', _fmt_space), 'space')]),
                 (select_fs_std, ds_bold_aparc_std, [('bold_aparc_std', 'in_file'),
-                                                    (('template', _get_space), 'space'),
-                                                    (('template', _get_extra), 'extra_values')]),
+                                                    (('template', _fmt_space), 'space')]),
                 (inputnode, ds_bold_aseg_std, [('source_file', 'source_file')]),
                 (inputnode, ds_bold_aparc_std, [('source_file', 'source_file')])
             ])
@@ -319,25 +314,16 @@ def _gen_ref_name(in_tuple):
         '-'.join(item) for item in in_tuple[1].items()])
 
 
-def _get_space(in_tuple):
-    return in_tuple[0].split(':')[0]
+def _fmt_space(in_tuple):
+    out = in_tuple[0].split(':')
+    res = in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
+    if res:
+        out.append('-'.join(('res', res)))
+    return out
 
 
 def _get_resolution(in_tuple):
-    return in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
-
-
-def _get_extra(in_tuple):
-    from nipype.interfaces.base.traits_extension import _Undefined
-    elems = []
-    if in_tuple[1].get('cohort'):
-        elems.append('cohort-%s' % in_tuple[1].get('cohort'))
-    res = in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
-    if res:
-        elems.append('res-%s' % res)
-    if elems:
-        return ['_'.join(elems)]
-    return _Undefined
+    return
 
 
 def _get_density(in_tuple):

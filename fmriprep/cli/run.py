@@ -701,7 +701,7 @@ def parse_spaces(opts):
 
     if opts.cifti_output:
         # CIFTI grayordinates to corresponding FSL-MNI resolutions.
-        vol_res = '2' if opts.cifti_output == '91k' else '3'
+        vol_res = '2' if opts.cifti_output == '91k' else '6'
         spaces.add(('fsaverage', {'den': '164k'}))
         spaces.add(('MNI152NLin6Asym', {'res': vol_res}))
 

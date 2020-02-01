@@ -714,7 +714,8 @@ def parse_spaces(opts):
         )
 
     # Add the default standard space (required by several sub-workflows)
-    spaces.add("MNI152NLin2009cAsym")
+    if "MNI152NLin2009cAsym" not in spaces.get_std_spaces(dim=(3,)):
+        spaces.add("MNI152NLin2009cAsym")
     return spaces
 
 

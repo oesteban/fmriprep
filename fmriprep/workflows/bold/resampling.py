@@ -270,9 +270,12 @@ def init_bold_std_trans_wf(
 
     """
     workflow = Workflow(name=name)
-    std_vol_references = [(s.fullname, s.spec) for s in
-                          spaces.get_std_spaces(only_names=False, dim=(3,))]
     output_references = [s.fullname for s in spaces.snapshot if s.dim == 3 and s.standard]
+
+    std_spaces_set = {s for s in spaces.get_std_spaces(dim=(3,)) if s}
+    std_vol_references = [
+        (s.fullname, s.spec) for s in spaces.spaces if s.fullname in std_spaces_set
+    ]
 
     if len(output_references) == 1:
         workflow.__desc__ = """\
@@ -297,27 +300,20 @@ preprocessed BOLD runs*: {tpl}.
             'hmc_xforms',
             'itk_bold_to_t1',
             'name_source',
-            'std_target',
             'templates',
         ]),
         name='inputnode'
     )
+
+    iterablesource = pe.Node(
+        niu.IdentityInterface(fields=['std_target']), name='iterablesource'
+    )
     # Generate conversions for every template+spec at the input
-    inputnode.iterables = [('std_target', std_vol_references)]
-
-    # Connect output nodes
-    output_names = [
-        'bold_std', 'bold_std_ref', 'bold_mask_std',
-        'template', 'spatial_reference',
-    ]
-    if freesurfer:
-        output_names += ['bold_aseg_std', 'bold_aparc_std']
-
-    outputnode = pe.JoinNode(niu.IdentityInterface(fields=output_names),
-                             name='outputnode', joinsource='inputnode')
+    iterablesource.iterables = [('std_target', std_vol_references)]
 
     split_target = pe.Node(niu.Function(
-        function=_split_spec, input_names=['in_target'], output_names=['name', 'spec']),
+        function=_split_spec, input_names=['in_target'],
+        output_names=['space', 'template', 'spec']),
         run_without_submitting=True, name='split_target')
 
     select_std = pe.Node(KeySelect(fields=['anat2std_xfm']),
@@ -338,21 +334,6 @@ preprocessed BOLD runs*: {tpl}.
     # Write corrected file in the designated output dir
     mask_merge_tfms = pe.Node(niu.Merge(2), name='mask_merge_tfms', run_without_submitting=True,
                               mem_gb=DEFAULT_MEMORY_MIN_GB)
-    workflow.connect([
-        (inputnode, split_target, [('std_target', 'in_target')]),
-        (inputnode, select_std, [('templates', 'keys'),
-                                 ('anat2std_xfm', 'anat2std_xfm')]),
-        (inputnode, mask_std_tfm, [('bold_mask', 'input_image')]),
-        (inputnode, gen_ref, [(('bold_split', _first), 'moving_image')]),
-        (inputnode, mask_merge_tfms, [(('itk_bold_to_t1', _aslist), 'in2')]),
-        (split_target, select_std, [('name', 'key')]),
-        (inputnode, select_tpl, [('std_target', 'template')]),
-        (select_std, mask_merge_tfms, [('anat2std_xfm', 'in1')]),
-        (split_target, gen_ref, [(('spec', _is_native), 'keep_native')]),
-        (select_tpl, gen_ref, [('out', 'fixed_image')]),
-        (mask_merge_tfms, mask_std_tfm, [('out', 'transforms')]),
-        (gen_ref, mask_std_tfm, [('out_file', 'reference_image')]),
-    ])
 
     nxforms = [3, 4][use_fieldwarp]
     merge_xforms = pe.Node(niu.Merge(nxforms), name='merge_xforms',
@@ -369,28 +350,54 @@ preprocessed BOLD runs*: {tpl}.
     merge = pe.Node(Merge(compress=use_compression), name='merge',
                     mem_gb=mem_gb * 3)
 
-    # Generate a reference on the target T1w space
+    # Generate a reference on the target standard space
     gen_final_ref = init_bold_reference_wf(
         omp_nthreads=omp_nthreads, pre_mask=True)
 
     workflow.connect([
+        (iterablesource, split_target, [('std_target', 'in_target')]),
+        (iterablesource, select_tpl, [('std_target', 'template')]),
+        (inputnode, select_std, [('anat2std_xfm', 'anat2std_xfm'),
+                                 ('templates', 'keys')]),
+        (inputnode, mask_std_tfm, [('bold_mask', 'input_image')]),
+        (inputnode, gen_ref, [(('bold_split', _first), 'moving_image')]),
         (inputnode, merge_xforms, [
             (('itk_bold_to_t1', _aslist), 'in2')]),
         (inputnode, merge, [('name_source', 'header_source')]),
+        (inputnode, mask_merge_tfms, [(('itk_bold_to_t1', _aslist), 'in2')]),
         (inputnode, bold_to_std_transform, [('bold_split', 'input_image')]),
+        (split_target, select_std, [('space', 'key')]),
         (select_std, merge_xforms, [('anat2std_xfm', 'in1')]),
+        (select_std, mask_merge_tfms, [('anat2std_xfm', 'in1')]),
+        (split_target, gen_ref, [(('spec', _is_native), 'keep_native')]),
+        (select_tpl, gen_ref, [('out', 'fixed_image')]),
         (merge_xforms, bold_to_std_transform, [('out', 'transforms')]),
         (gen_ref, bold_to_std_transform, [('out_file', 'reference_image')]),
+        (gen_ref, mask_std_tfm, [('out_file', 'reference_image')]),
+        (mask_merge_tfms, mask_std_tfm, [('out', 'transforms')]),
+        (mask_std_tfm, gen_final_ref, [('output_image', 'inputnode.bold_mask')]),
         (bold_to_std_transform, merge, [('out_files', 'in_files')]),
         (merge, gen_final_ref, [('out_file', 'inputnode.bold_file')]),
-        (mask_std_tfm, gen_final_ref, [('output_image', 'inputnode.bold_mask')]),
+    ])
+
+    output_names = [
+        'bold_mask_std',
+        'bold_std',
+        'bold_std_ref',
+        'spatial_reference',
+        'template',
+    ] + freesurfer * ['bold_aseg_std', 'bold_aparc_std']
+
+    poutputnode = pe.Node(niu.IdentityInterface(fields=output_names),
+                          name='poutputnode')
+    workflow.connect([
         # Connecting outputnode
-        (inputnode, outputnode, [
+        (iterablesource, poutputnode, [
             (('std_target', _gen_ref_name), 'spatial_reference')]),
-        (gen_final_ref, outputnode, [('outputnode.ref_image', 'bold_std_ref')]),
-        (merge, outputnode, [('out_file', 'bold_std')]),
-        (mask_std_tfm, outputnode, [('output_image', 'bold_mask_std')]),
-        (inputnode, outputnode, [('std_target', 'template')]),
+        (merge, poutputnode, [('out_file', 'bold_std')]),
+        (gen_final_ref, poutputnode, [('outputnode.ref_image', 'bold_std_ref')]),
+        (mask_std_tfm, poutputnode, [('output_image', 'bold_mask_std')]),
+        (select_std, poutputnode, [('key', 'template')]),
     ])
 
     if freesurfer:
@@ -409,9 +416,16 @@ preprocessed BOLD runs*: {tpl}.
             (select_std, aparc_std_tfm, [('anat2std_xfm', 'transforms')]),
             (gen_ref, aseg_std_tfm, [('out_file', 'reference_image')]),
             (gen_ref, aparc_std_tfm, [('out_file', 'reference_image')]),
-            (aseg_std_tfm, outputnode, [('output_image', 'bold_aseg_std')]),
-            (aparc_std_tfm, outputnode, [('output_image', 'bold_aparc_std')]),
+            (aseg_std_tfm, poutputnode, [('output_image', 'bold_aseg_std')]),
+            (aparc_std_tfm, poutputnode, [('output_image', 'bold_aparc_std')]),
         ])
+
+    # Connect parametric outputs to a Join outputnode
+    outputnode = pe.JoinNode(niu.IdentityInterface(fields=output_names),
+                             name='outputnode', joinsource='iterablesource')
+    workflow.connect([
+        (poutputnode, outputnode, [(f, f) for f in output_names]),
+    ])
     return workflow
 
 
@@ -766,8 +780,9 @@ surface space.
 
 
 def _split_spec(in_target):
-    name, spec = in_target
-    return name, spec
+    space, spec = in_target
+    template = space.split(':')[0]
+    return space, template, spec
 
 
 def _gen_ref_name(in_tuple):

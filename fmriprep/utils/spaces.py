@@ -32,6 +32,28 @@ class SpacesManagerAction(Action):
         """Execute parser."""
         spaces = getattr(namespace, self.dest) or SpacesManager()
         for val in values:
+            val = val.rstrip(":")
+            # Should we support some sort of explicit "default" resolution?
+            # if ":res-" not in val or ":resolution-" not in val:
+            #     val = ":".join((val, "res-default"))
             for sp in Space.from_string(val):
                 spaces.add(sp)
         setattr(namespace, self.dest, spaces)
+
+
+def format_space(in_tuple):
+    """
+    Format a given space tuple.
+
+    >>> format_space(('MNI152Lin', {'res': 1}))
+    'MNI152Lin_res-1'
+
+    >>> format_space(('MNIPediatricAsym:cohort-2', {'res': 2}))
+    'MNIPediatricAsym_cohort-2_res-2'
+
+    """
+    out = in_tuple[0].split(':')
+    res = in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
+    if res:
+        out.append('-'.join(('res', str(res))))
+    return '_'.join(out)

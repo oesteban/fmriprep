@@ -11,6 +11,7 @@ from niworkflows.interfaces.utility import KeySelect
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
+from ...utils.spaces import format_space as _fmt_space
 
 
 def init_func_derivatives_wf(
@@ -185,12 +186,17 @@ def init_func_derivatives_wf(
 
     # Store resamplings in standard spaces when listed in --output-spaces
     if spaces.snapshot:
-        volume_std_spaces = [_gen_ref_name((s.name, s.spec))
-                             for s in spaces.snapshot if s.dim == 3 and s.standard]
+        itersource = pe.Node(niu.IdentityInterface(fields=['space_definition']),
+                             name='itersource')
+
+        itersource.iterables = (
+            'space_definition',
+            [(s.fullname, s.spec) for s in spaces.snapshot if s.dim == 3 and s.standard]
+        )
+
         select_std = pe.Node(KeySelect(
             fields=['template', 'bold_std', 'bold_std_ref', 'bold_mask_std']),
             name='select_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
-        select_std.iterables = [('key', volume_std_spaces)]
 
         ds_bold_std = pe.Node(
             DerivativesDataSink(base_directory=output_dir, desc='preproc',
@@ -207,20 +213,21 @@ def init_func_derivatives_wf(
             name='ds_bold_mask_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
 
         workflow.connect([
+            (inputnode, ds_bold_std, [('source_file', 'source_file')]),
+            (inputnode, ds_bold_std_ref, [('source_file', 'source_file')]),
+            (inputnode, ds_bold_mask_std, [('source_file', 'source_file')]),
             (inputnode, select_std, [('bold_std', 'bold_std'),
                                      ('bold_std_ref', 'bold_std_ref'),
                                      ('bold_mask_std', 'bold_mask_std'),
                                      ('template', 'template'),
                                      ('spatial_reference', 'keys')]),
+            (itersource, select_std, [(('space_definition', _fmt_space), 'key')]),
             (select_std, ds_bold_std, [('bold_std', 'in_file'),
-                                       (('template', _fmt_space), 'space')]),
+                                       ('key', 'space')]),
             (select_std, ds_bold_std_ref, [('bold_std_ref', 'in_file'),
-                                           (('template', _fmt_space), 'space')]),
+                                           ('key', 'space')]),
             (select_std, ds_bold_mask_std, [('bold_mask_std', 'in_file'),
-                                            (('template', _fmt_space), 'space')]),
-            (inputnode, ds_bold_std, [('source_file', 'source_file')]),
-            (inputnode, ds_bold_std_ref, [('source_file', 'source_file')]),
-            (inputnode, ds_bold_mask_std, [('source_file', 'source_file')]),
+                                            ('key', 'space')]),
             (raw_sources, ds_bold_mask_std, [('out', 'RawSources')]),
         ])
 
@@ -228,8 +235,6 @@ def init_func_derivatives_wf(
             select_fs_std = pe.Node(KeySelect(
                 fields=['bold_aseg_std', 'bold_aparc_std', 'template']),
                 name='select_fs_std', run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
-            select_fs_std.iterables = [('key', volume_std_spaces)]
-
             ds_bold_aseg_std = pe.Node(DerivativesDataSink(
                 base_directory=output_dir, desc='aseg', suffix='dseg'),
                 name='ds_bold_aseg_std', run_without_submitting=True,
@@ -239,14 +244,16 @@ def init_func_derivatives_wf(
                 name='ds_bold_aparc_std', run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB)
             workflow.connect([
+                (itersource, select_fs_std, [
+                    (('space_definition', _fmt_space), 'key')]),
                 (inputnode, select_fs_std, [('bold_aseg_std', 'bold_aseg_std'),
                                             ('bold_aparc_std', 'bold_aparc_std'),
                                             ('template', 'template'),
                                             ('spatial_reference', 'keys')]),
                 (select_fs_std, ds_bold_aseg_std, [('bold_aseg_std', 'in_file'),
-                                                   (('template', _fmt_space), 'space')]),
+                                                   ('key', 'space')]),
                 (select_fs_std, ds_bold_aparc_std, [('bold_aparc_std', 'in_file'),
-                                                    (('template', _fmt_space), 'space')]),
+                                                    ('key', 'space')]),
                 (inputnode, ds_bold_aseg_std, [('source_file', 'source_file')]),
                 (inputnode, ds_bold_aparc_std, [('source_file', 'source_file')])
             ])
@@ -307,19 +314,6 @@ def init_func_derivatives_wf(
         ])
 
     return workflow
-
-
-def _gen_ref_name(in_tuple):
-    return '_'.join(['space-%s' % in_tuple[0].split(':')[0]] + [
-        '-'.join(item) for item in in_tuple[1].items()])
-
-
-def _fmt_space(in_tuple):
-    out = in_tuple[0].split(':')
-    res = in_tuple[1].get('res', None) or in_tuple[1].get('resolution', None)
-    if res:
-        out.append('-'.join(('res', res)))
-    return out
 
 
 def _get_resolution(in_tuple):

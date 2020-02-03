@@ -30,6 +30,7 @@ from niworkflows.interfaces.nilearn import Merge
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
+from ...utils.spaces import format_space
 
 from .util import init_bold_reference_wf
 
@@ -393,7 +394,7 @@ preprocessed BOLD runs*: {tpl}.
     workflow.connect([
         # Connecting outputnode
         (iterablesource, poutputnode, [
-            (('std_target', _gen_ref_name), 'spatial_reference')]),
+            (('std_target', format_space), 'spatial_reference')]),
         (merge, poutputnode, [('out_file', 'bold_std')]),
         (gen_final_ref, poutputnode, [('outputnode.ref_image', 'bold_std_ref')]),
         (mask_std_tfm, poutputnode, [('output_image', 'bold_mask_std')]),
@@ -783,11 +784,6 @@ def _split_spec(in_target):
     space, spec = in_target
     template = space.split(':')[0]
     return space, template, spec
-
-
-def _gen_ref_name(in_tuple):
-    return '_'.join(['space-%s' % in_tuple[0].split(':')[0]] + [
-        '-'.join(item) for item in in_tuple[1].items()])
 
 
 def _select_template(template):

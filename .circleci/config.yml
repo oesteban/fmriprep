@@ -395,7 +395,7 @@ jobs:
                 --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
                 --use-aroma \
                 --skull-strip-template OASIS30ANTs:res-1 \
-                --output-spaces fsLR MNI152NLin2009cAsym fsaverage5 fsnative MNI152NLin6Asym anat \
+                --output-spaces MNI152NLin2009cAsym fsaverage5 fsnative MNI152NLin6Asym anat \
                 --use-plugin /home/circleci/src/fmriprep/.circleci/legacy.yml \
                 --nthreads 2 --cifti-output -vv
       - run:
@@ -422,7 +422,7 @@ jobs:
                 /tmp/data/ds005 /tmp/ds005/derivatives_partial participant \
                 --fs-subjects-dir /tmp/ds005/freesurfer \
                 --sloppy --write-graph --use-syn-sdc --mem_mb 4096 \
-                --output-spaces fsLR MNI152NLin2009cAsym fsaverage5 fsnative MNI152NLin6Asym anat \
+                --output-spaces MNI152NLin2009cAsym fsaverage5 fsnative MNI152NLin6Asym anat \
                 --aroma-melodic-dimensionality 2 --use-aroma \
                 --nthreads 2 --cifti-output -vv
       - run:

@@ -681,6 +681,7 @@ jobs:
                 /tmp/data/ds210 /tmp/ds210/derivatives participant \
                 --fs-no-reconall --t2s-coreg --use-syn-sdc \
                 --dummy-scans 1 --sloppy --write-graph \
+                --output-spaces MNI152NLin2009cAsym \
                 --mem_mb 4096 --nthreads 2 -vv
       - run:
           name: Checking outputs of fMRIPrep

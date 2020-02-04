@@ -722,7 +722,7 @@ surface space.
     # extract out to BOLD base
     select_std = pe.Node(KeySelect(fields=['bold_std']), name='select_std',
                          run_without_submitting=True, nohash=True)
-    select_std.inputs.key = 'space-MNI152NLin6Asym_res-%s' % mni_density
+    select_std.inputs.key = 'MNI152NLin6Asym_res-%s' % mni_density
 
     select_fs_surf = pe.Node(KeySelect(
         fields=['surf_files']), name='select_fs_surf',

@@ -652,7 +652,7 @@ in the corresponding confounds file.
     # extract out to BOLD base
     select_std = pe.Node(KeySelect(fields=['bold_mask_std', 'bold_std']),
                          name='select_std', run_without_submitting=True)
-    select_std.inputs.key = 'space-MNI152NLin6Asym_res-2'
+    select_std.inputs.key = 'MNI152NLin6Asym_res-2'
 
     rm_non_steady_state = pe.Node(niu.Function(function=_remove_volumes,
                                                output_names=['bold_cut']),

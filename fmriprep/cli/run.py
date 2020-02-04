@@ -135,7 +135,7 @@ Important to note, the ``res-*`` modifier does not define the resolution used fo
 the spatial normalization.
 For further details, please check out \
 https://fmriprep.readthedocs.io/en/%s/spaces.html""" % (currentv.base_version
-        if is_release else 'latest'))
+                                                        if is_release else 'latest'))
 
     g_conf.add_argument('--bold2t1w-dof', action='store', default=6, choices=[6, 9, 12], type=int,
                         help='Degrees of freedom when registering BOLD to T1w images. '

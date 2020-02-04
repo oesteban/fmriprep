@@ -5,7 +5,7 @@
 Defining standard and nonstandard spaces where data will be resampled
 =====================================================================
 
-The command line interface of fMRIPrep allows resampling the preprocessed data
+The command line interface of *fMRIPrep* allows resampling the preprocessed data
 onto other output spaces.
 That is achieved using the ``--output-spaces`` argument, where standard and
 nonstandard spaces can be inserted.
@@ -13,20 +13,20 @@ nonstandard spaces can be inserted.
 Standard spaces
 """""""""""""""
 
-When using fMRIPrep in a workflow that will investigate effects that span across
+When using *fMRIPrep* in a workflow that will investigate effects that span across
 analytical groupings, neuroimagers typically resample their data on to a standard,
 stereotactic coordinate system.
 The most extended standard space for fMRI analyses is generally referred to MNI.
-For instance, to instruct fMRIPrep to use the MNI template brain distributed with
+For instance, to instruct *fMRIPrep* to use the MNI template brain distributed with
 FSL as coordinate reference the option will read as follows: ``--output-spaces MNI152NLin6Asym``.
-By default, fMRIPrep uses ``MNI152NLin2009cAsym`` as spatial-standardization reference.
+By default, *fMRIPrep* uses ``MNI152NLin2009cAsym`` as spatial-standardization reference.
 Valid template identifiers (``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, etc.) come from
 the `TemplateFlow project <https://github.com/templateflow/templateflow>`__.
 
-Therefore, fMRIPrep will run nonlinear registration processes against the template
+Therefore, *fMRIPrep* will run nonlinear registration processes against the template
 T1w image corresponding to all the standard spaces supplied with the argument
 ``--output-spaces``.
-By default, fMRIPrep will resample the preprocessed data on those spaces (labeling the
+By default, *fMRIPrep* will resample the preprocessed data on those spaces (labeling the
 corresponding outputs with the `space-<template-identifier>` BIDS entity) but keeping
 the original resolution of the BOLD data to produce smaller files, more consistent with
 the original data gridding.
@@ -39,14 +39,27 @@ preprocessed BOLD 4D files on two standard spaces (``MNI152NLin6Asym``,
 and ``MNI152NLin2009cAsym``) with the template's 2mm isotropic resolution for
 the data on ``MNI152NLin6Asym`` space and the original BOLD resolution
 (say, e.g., 2x2x2.5 [mm]) for the case of ``MNI152NLin2009cAsym``.
+This is equivalent to saying
+``--output-spaces MNI152NLin6Asym:res-2 MNI152NLin2009cAsym:res-native``.
 
 Other possible modifiers are, for instance, the ``cohort`` selector.
 Although currently there is no template in TemplateFlow with several cohorts,
 very soon we will integrate pediatric templates, for which ``cohort`` will
 function to select the appropriate age range.
-Therefore, in upcoming versions of fMRIPrep, it will be possible to run it with
+Therefore, in upcoming versions of *fMRIPrep*, it will be possible to run it with
 ``--output-spaces MNIPediatricAsym:res-2:cohort-2`` where ``cohort-2`` would select
 the template instance for the, say, 24-48 months old range.
+
+Space modifiers such as ``res`` are combinatorial:
+``--output-spaces MNIPediatricAsym:cohort-1:cohort-2:res-native:res-1`` will
+generate conversions for the following combinations:
+
+  * cohort ``1`` and "native" resolution (meaning, the original BOLD resolution),
+  * cohort ``1`` and resolution ``1`` of the template,
+  * cohort ``2`` and "native" resolution (meaning, the original BOLD resolution), and
+  * cohort ``2`` and resolution ``1`` of the template.
+
+Please mind that the selected resolutions specified must exist within TemplateFlow.
 
 When specifying surface spaces (e.g., ``fsaverage``), the legacy identifiers from
 FreeSurfer will be supported (e.g., ``fsaverage5``) although the use of the density
@@ -61,7 +74,7 @@ Although the functionality is not available yet, the interface of the
 follow TemplateFlow's naming conventions
 (e.g., ``/path/to/custom/templates/tpl-MyCustom:res-2``).
 Following the example, at least the following files
-must be found under under ``/path/to/custom/templates/tpl-MyCustom``: ::
+must be found under under ``/path/to/custom/templates/tpl-MyCustom``::
 
   tpl-MyCustom/
       template_description.json
@@ -82,7 +95,7 @@ that do not generate *standardized* coordinate spaces:
     reference generated with the T1w and T2w images available within the
     BIDS structure.
   * ``fsnative``: similarly to the ``anat`` space for volumetric references,
-    including the ``fsnative`` space will instruct fMRIPrep to sample the
+    including the ``fsnative`` space will instruct *fMRIPrep* to sample the
     original BOLD data onto FreeSurfer's reconstructed surfaces for this
     individual.
   * ``func``, ``bold``, ``run``, ``boldref`` or ``sbref`` can be used to
@@ -104,7 +117,7 @@ When selecting those modules to be included (using any of the following flags:
 ``--use-aroma``, ``--cifti-outputs``, ``--use-syn-sdc``) will modify the list of
 output spaces to include the space identifiers they require, should the
 identifier not be found within the ``--output-spaces`` list already.
-In other words, running fMRIPrep with ``--output-spaces MNI152NLin6Asym:res-2
+In other words, running *fMRIPrep* with ``--output-spaces MNI152NLin6Asym:res-2
 --use-syn-sdc`` will expand the list of output spaces to be
 ``MNI152NLin6Asym:res-2 MNI152NLin2009cAsym``.
 
@@ -143,21 +156,18 @@ To do so, follow the next steps.
   1. By default, a mirror of *TemplateFlow* to store the resources will be
      created in ``$HOME/.cache/templateflow``.
      You can modify such a configuration with the ``TEMPLATEFLOW_HOME``
-     environment variable, e.g.:
-     ::
+     environment variable, e.g.::
   
        $ export TEMPLATEFLOW_HOME=$HOME/.templateflow
   
   2. Install the client within your favorite Python 3 environment (this can
      be done in your login-node, or in a host with Internet access, 
-     without need for Docker/Singularity):
-     ::
+     without need for Docker/Singularity)::
        
        $ python -m pip install -U templateflow
   
   3. Use the ``get()`` utility of the client to pull down all the templates you'll
-     want to use. For example:
-     ::
+     want to use. For example::
   
        $ python -c "from templateflow.api import get; get(['MNI152NLin2009cAsym', 'MNI152NLin6Asym', 'OASIS30ANTs', 'MNIPediatricAsym', 'MNIInfant'])"
 

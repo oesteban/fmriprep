@@ -96,9 +96,10 @@ The BOLD time-series were resampled onto the following surfaces
 
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['source_file', 't1w_preproc', 'subject_id', 'subjects_dir',
-                                      't1w2fsnative_xfm', 'target']),
+                                      't1w2fsnative_xfm']),
         name='inputnode')
-    inputnode.iterables = [('target', surface_spaces)]
+    itersource = pe.Node(niu.IdentityInterface(fields=['target']), name='itersource')
+    itersource.iterables = [('target', surface_spaces)]
 
     def select_target(subject_id, space):
         """Get the target subject ID, given a source subject ID and a target space."""
@@ -131,24 +132,24 @@ The BOLD time-series were resampled onto the following surfaces
                                  name='update_metadata', mem_gb=DEFAULT_MEMORY_MIN_GB)
 
     outputnode = pe.JoinNode(niu.IdentityInterface(fields=['surfaces', 'target']),
-                             joinsource='inputnode', name='outputnode')
+                             joinsource='itersource', name='outputnode')
 
     workflow.connect([
-        (inputnode, targets, [('subject_id', 'subject_id'),
-                              ('target', 'space')]),
-        (inputnode, outputnode, [('target', 'target')]),
-        (inputnode, rename_src, [('source_file', 'in_file'),
-                                 ('target', 'subject')]),
+        (inputnode, targets, [('subject_id', 'subject_id')]),
+        (inputnode, rename_src, [('source_file', 'in_file')]),
         (inputnode, resampling_xfm, [('source_file', 'source_file'),
                                      ('t1w_preproc', 'target_file')]),
         (inputnode, set_xfm_source, [('t1w2fsnative_xfm', 'in_lta2')]),
-        (resampling_xfm, set_xfm_source, [('out_lta', 'in_lta1')]),
         (inputnode, sampler, [('subjects_dir', 'subjects_dir'),
                               ('subject_id', 'subject_id')]),
+        (itersource, targets, [('target', 'space')]),
+        (itersource, rename_src, [('target', 'subject')]),
+        (resampling_xfm, set_xfm_source, [('out_lta', 'in_lta1')]),
         (set_xfm_source, sampler, [('out_file', 'reg_file')]),
         (targets, sampler, [('out', 'target_subject')]),
         (rename_src, sampler, [('out_file', 'source_file')]),
         (update_metadata, outputnode, [('out_file', 'surfaces')]),
+        (itersource, outputnode, [('target', 'target')]),
     ])
 
     if not medial_surface_nan:

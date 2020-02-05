@@ -314,11 +314,3 @@ def init_func_derivatives_wf(
         ])
 
     return workflow
-
-
-def _get_resolution(in_tuple):
-    return
-
-
-def _get_density(in_tuple):
-    return in_tuple[1].get('den', None) or in_tuple[1].get('density', None)

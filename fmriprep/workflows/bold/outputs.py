@@ -41,14 +41,16 @@ def init_func_derivatives_wf(
     output_dir : str
         Where derivatives should be written out to.
     spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
-        Organize and filter spatial normalizations. Composed of internal and output lists
-        of spaces in the form of (Template, Specs). `Template` is a string of either
-        TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
-        ``fsLR``), nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
+        A container for storing, organizing, and parsing spatial normalizations. Composed of
+        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
+        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
+        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
         or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        Specs is a dictionary with template specifications (e.g., the specs for the template
-        ``MNI152Lin`` could be ``{'resolution': 2}`` if one wants the resampling to be done on
-        the 2mm resolution version of the selected template).
+        A ``Reference`` may also contain a spec, which is a dictionary with template
+        specifications (e.g., the specs for the template ``MNI152Lin`` could be
+        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
+        version of the selected template).
     use_aroma : bool
         Whether ``--use-aroma`` flag was set.
     fslr_density : str, optional

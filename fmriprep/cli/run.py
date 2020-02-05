@@ -38,7 +38,7 @@ def get_parser():
     from packaging.version import Version
     from ..__about__ import __version__
     from .version import check_latest, is_flagged
-    from ..utils.spaces import Space, SpacesManager, SpacesManagerAction
+    from niworkflows.utils.spaces import Reference, SpatialReferences, OutputReferencesAction
 
     verstr = 'fMRIPrep v{}'.format(__version__)
     currentv = Version(__version__)
@@ -123,7 +123,7 @@ def get_parser():
              'option is not enabled, standard EPI-T1 coregistration is performed '
              'using the middle echo.')
     g_conf.add_argument(
-        '--output-spaces', nargs='+', action=SpacesManagerAction, default=SpacesManager(),
+        '--output-spaces', nargs='+', action=OutputReferencesAction, default=SpatialReferences(),
         help="""\
 Standard and non-standard spaces to resample anatomical and functional images to. \
 Standard spaces may be specified by the form \
@@ -182,7 +182,7 @@ https://fmriprep.readthedocs.io/en/%s/spaces.html""" % (currentv.base_version
     #  ANTs options
     g_ants = parser.add_argument_group('Specific options for ANTs registrations')
     g_ants.add_argument(
-        '--skull-strip-template', action='store', default='OASIS30ANTs', type=Space.from_string,
+        '--skull-strip-template', default='OASIS30ANTs', type=Reference.from_string,
         help='select a template for skull-stripping with antsBrainExtraction')
     g_ants.add_argument('--skull-strip-fixed-seed', action='store_true',
                         help='do not use a random seed for skull-stripping - will ensure '
@@ -693,7 +693,7 @@ def parse_spaces(opts):
 
     """
     spaces = opts.output_spaces
-    spaces.snap()
+    spaces.checkpoint()
 
     if opts.use_aroma:
         # Make sure there's a normalization to FSL for AROMA to use.

@@ -85,17 +85,9 @@ def init_fmriprep_wf(
             from collections import namedtuple, OrderedDict
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
             from fmriprep.workflows.base import init_fmriprep_wf
-            from niworkflows.utils.spaces import Space
-            from fmriprep.utils.spaces import SpacesManager
+            from niworkflows.utils.spaces import Reference, SpatialReferences
 
             os.environ['FREESURFER_HOME'] = os.getcwd()
-            spaces = SpacesManager([
-                ('MNI152Lin',),
-                ('fsaverage', {'density': '10k'}),
-                ('T1w',),
-                ('fsnative',)
-            ])
-            spaces.snap()
             wf = init_fmriprep_wf(
                 anat_only=False,
                 aroma_melodic_dim=-200,
@@ -123,8 +115,13 @@ def init_fmriprep_wf(
                 regressors_fd_th=0.5,
                 run_uuid='X',
                 skull_strip_fixed_seed=False,
-                skull_strip_template=Space('OASIS30ANTs', {}),
-                spaces=spaces,
+                skull_strip_template=Reference('OASIS30ANTs'),
+                spaces=SpatialReferences(
+                    spaces=['MNI152Lin',
+                            ('fsaverage', {'density': '10k'}),
+                            'T1w',
+                            'fsnative'],
+                    checkpoint=True),
                 subject_list=['fmripreptest'],
                 t2s_coreg=False,
                 task_id='',
@@ -191,15 +188,17 @@ def init_fmriprep_wf(
     skull_strip_fixed_seed : bool
         Do not use a random seed for skull-stripping - will ensure
         run-to-run replicability when used with --omp-nthreads 1
-    spaces : :py:class:`~fmriprep.utils.spaces.SpacesManager`
-        Organize and filter spatial normalizations. Composed of internal and output lists
-        of spaces in the form of (Template, Specs). `Template` is a string of either
-        TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
-        ``fsLR``), nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
+    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
+        A container for storing, organizing, and parsing spatial normalizations. Composed of
+        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
+        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
+        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
         or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        Specs is a dictionary with template specifications (e.g., the specs for the template
-        ``MNI152Lin`` could be ``{'resolution': 2}`` if one wants the resampling to be done on
-        the 2mm resolution version of the selected template).
+        A ``Reference`` may also contain a spec, which is a dictionary with template
+        specifications (e.g., the specs for the template ``MNI152Lin`` could be
+        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
+        version of the selected template).
     subject_list : list
         List of subject labels
     t2s_coreg : bool
@@ -336,18 +335,10 @@ def init_single_subject_wf(
             :simple_form: yes
 
             from collections import namedtuple
-            from niworkflows.utils.spaces import Space
-            from fmriprep.utils.spaces import SpacesManager
+            from niworkflows.utils.spaces import Reference, SpatialReferences
             from fmriprep.workflows.base import init_single_subject_wf
 
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
-            spaces = SpacesManager([
-                ('MNI152Lin',),
-                ('fsaverage', {'density': '10k'}),
-                ('T1w',),
-                ('fsnative',)
-            ])
-            spaces.snap()
             wf = init_single_subject_wf(
                 anat_only=False,
                 aroma_melodic_dim=-200,
@@ -375,8 +366,13 @@ def init_single_subject_wf(
                 regressors_dvars_th=1.5,
                 regressors_fd_th=0.5,
                 skull_strip_fixed_seed=False,
-                skull_strip_template=Space('OASIS30ANTs', {}),
-                spaces=spaces,
+                skull_strip_template=Reference('OASIS30ANTs'),
+                spaces=SpatialReferences(
+                    spaces=['MNI152Lin',
+                            ('fsaverage', {'density': '10k'}),
+                            'T1w',
+                            'fsnative'],
+                    checkpoint=True),
                 subject_id='test',
                 t2s_coreg=False,
                 task_id='',
@@ -450,15 +446,17 @@ def init_single_subject_wf(
         List of subject labels
     t2s_coreg : bool
         For multi-echo EPI, use the calculated T2*-map for T2*-driven coregistration
-    spaces : :py:class:`~fmriprep.utils.spaces.SpacesManager`
-        Organize and filter spatial normalizations. Composed of internal and output lists
-        of spaces in the form of (Template, Specs). `Template` is a string of either
-        TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
-        ``fsLR``), nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
+    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
+        A container for storing, organizing, and parsing spatial normalizations. Composed of
+        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
+        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
+        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
         or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        Specs is a dictionary with template specifications (e.g., the specs for the template
-        ``MNI152Lin`` could be ``{'resolution': 2}`` if one wants the resampling to be done on
-        the 2mm resolution version of the selected template).
+        A ``Reference`` may also contain a spec, which is a dictionary with template
+        specifications (e.g., the specs for the template ``MNI152Lin`` could be
+        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
+        version of the selected template).
     task_id : str or None
         Task ID of BOLD series to preprocess, or ``None`` to preprocess all
     use_aroma : bool

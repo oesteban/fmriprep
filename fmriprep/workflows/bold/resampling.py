@@ -193,18 +193,16 @@ def init_bold_std_trans_wf(
             :graph2use: colored
             :simple_form: yes
 
-            from fmriprep.utils.spaces import SpacesManager
+            from niworkflows.utils.spaces import SpatialReferences
             from fmriprep.workflows.bold import init_bold_std_trans_wf
-            spaces = SpacesManager([
-                ('MNI152Lin', {}),
-                ('MNIPediatricAsym', {'cohort': '6'}),
-            ])
-            spaces.snap()
             wf = init_bold_std_trans_wf(
                 freesurfer=True,
                 mem_gb=3,
                 omp_nthreads=1,
-                spaces=spaces,
+                spaces=SpatialReferences(
+                    spaces=['MNI152Lin',
+                            ('MNIPediatricAsym', {'cohort': '6'})],
+                    checkpoint=True),
             )
 
     Parameters
@@ -215,8 +213,17 @@ def init_bold_std_trans_wf(
         Size of BOLD file in GB
     omp_nthreads : int
         Maximum number of threads an individual process may use
-    spaces : py:class:`~fmriprep.utils.spaces.SpacesManager`
-        Spaces manager object, which has been snapshotted.
+    spaces : py:class:`~niworkflows.utils.spaces.SpatialReferences`
+        A container for storing, organizing, and parsing spatial normalizations. Composed of
+        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
+        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
+        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
+        or paths pointing to custom templates organized in a TemplateFlow-like structure.
+        A ``Reference`` may also contain a spec, which is a dictionary with template
+        specifications (e.g., the specs for the template ``MNI152Lin`` could be
+        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
+        version of the selected template).
     name : str
         Name of workflow (default: ``bold_std_trans_wf``)
     use_compression : bool

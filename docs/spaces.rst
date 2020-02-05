@@ -9,6 +9,10 @@ onto other output spaces.
 That is achieved using the ``--output-spaces`` argument, where standard and
 nonstandard spaces can be inserted.
 
+.. important::
+   *fMRIPrep* will reduce the amount of output spaces to just spaces listed in ``--output-spaces``,
+   even if other options require resampling the preprocessed data into intermediary spaces.
+
 Standard spaces
 """""""""""""""
 When using *fMRIPrep* in a workflow that will investigate effects that span across
@@ -151,18 +155,18 @@ To do so, follow the next steps.
      created in ``$HOME/.cache/templateflow``.
      You can modify such a configuration with the ``TEMPLATEFLOW_HOME``
      environment variable, e.g.::
-  
+
        $ export TEMPLATEFLOW_HOME=$HOME/.templateflow
-  
+
   2. Install the client within your favorite Python 3 environment (this can
-     be done in your login-node, or in a host with Internet access, 
+     be done in your login-node, or in a host with Internet access,
      without need for Docker/Singularity)::
-       
+
        $ python -m pip install -U templateflow
-  
+
   3. Use the ``get()`` utility of the client to pull down all the templates you'll
      want to use. For example::
-  
+
        $ python -c "from templateflow.api import get; get(['MNI152NLin2009cAsym', 'MNI152NLin6Asym', 'OASIS30ANTs', 'MNIPediatricAsym', 'MNIInfant'])"
 
 After pulling down the resources you'll need, you will just need to make sure your

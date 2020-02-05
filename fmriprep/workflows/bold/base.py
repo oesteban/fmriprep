@@ -85,16 +85,9 @@ def init_func_preproc_wf(
             :simple_form: yes
 
             from collections import namedtuple
-            from niworkflows.utils.spaces import Space
-            from fmriprep.utils.spaces import SpacesManager
+            from niworkflows.utils.spaces import SpatialReferences
             from fmriprep.workflows.bold import init_func_preproc_wf
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
-            spaces = SpacesManager([
-                    ('MNI152Lin', {}),
-                    ('fsaverage', {'density': '10k'}),
-                    ('T1w', {}),
-                    ('fsnative', {})])
-            spaces.snap()
             wf = init_func_preproc_wf(
                 aroma_melodic_dim=-200,
                 bold2t1w_dof=9,
@@ -116,7 +109,12 @@ def init_func_preproc_wf(
                 regressors_dvars_th=1.5,
                 regressors_fd_th=0.5,
                 reportlets_dir='.',
-                spaces=spaces,
+                spaces=SpatialReferences(
+                    spaces=['MNI152Lin',
+                            ('fsaverage', {'density': '10k'}),
+                            'T1w',
+                            'fsnative'],
+                    checkpoint=True),
                 t2s_coreg=False,
                 use_aroma=False,
                 use_bbr=True,
@@ -169,15 +167,17 @@ def init_func_preproc_wf(
         Criterion for flagging framewise displacement outliers
     reportlets_dir : str
         Absolute path of a directory in which reportlets will be temporarily stored
-    spaces : py:class:`~fmriprep.utils.spaces.SpacesManager`
-        Organize and filter spatial normalizations. Composed of internal and output lists
-        of spaces in the form of (Template, Specs). `Template` is a string of either
-        TemplateFlow IDs (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or
-        ``fsLR``), nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
+    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
+        A container for storing, organizing, and parsing spatial normalizations. Composed of
+        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
+        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
+        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
         or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        Specs is a dictionary with template specifications (e.g., the specs for the template
-        ``MNI152Lin`` could be ``{'resolution': 2}`` if one wants the resampling to be done on
-        the 2mm resolution version of the selected template).
+        A ``Reference`` may also contain a spec, which is a dictionary with template
+        specifications (e.g., the specs for the template ``MNI152Lin`` could be
+        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
+        version of the selected template).
     t2s_coreg : bool
         For multiecho EPI, use the calculated T2*-map for T2*-driven coregistration
     use_aroma : bool

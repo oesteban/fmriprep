@@ -4,7 +4,6 @@
 
 Defining standard and nonstandard spaces where data will be resampled
 =====================================================================
-
 The command line interface of *fMRIPrep* allows resampling the preprocessed data
 onto other output spaces.
 That is achieved using the ``--output-spaces`` argument, where standard and
@@ -12,7 +11,6 @@ nonstandard spaces can be inserted.
 
 Standard spaces
 """""""""""""""
-
 When using *fMRIPrep* in a workflow that will investigate effects that span across
 analytical groupings, neuroimagers typically resample their data on to a standard,
 stereotactic coordinate system.
@@ -43,12 +41,11 @@ This is equivalent to saying
 ``--output-spaces MNI152NLin6Asym:res-2 MNI152NLin2009cAsym:res-native``.
 
 Other possible modifiers are, for instance, the ``cohort`` selector.
-Although currently there is no template in TemplateFlow with several cohorts,
-very soon we will integrate pediatric templates, for which ``cohort`` will
-function to select the appropriate age range.
-Therefore, in upcoming versions of *fMRIPrep*, it will be possible to run it with
-``--output-spaces MNIPediatricAsym:res-2:cohort-2`` where ``cohort-2`` would select
-the template instance for the, say, 24-48 months old range.
+For instance, ``--output-spaces MNIPediatricAsym:res-1:cohort-2`` selects
+the resolution ``1`` of ``cohort-2`` which, for the ``MNIPediatricAsym``
+template, corresponds to the `prepuberty phase
+<https://github.com/templateflow/tpl-MNIPediatricAsym/blob/bcf77616f547f327ee53c01dadf689ab6518a097/template_description.json#L22-L26>`__
+(4.5--8.5 years old).
 
 Space modifiers such as ``res`` are combinatorial:
 ``--output-spaces MNIPediatricAsym:cohort-1:cohort-2:res-native:res-1`` will
@@ -68,7 +65,6 @@ selecting ``fsLR`` surface space without a density label, ``fsLR:den-32k`` will 
 
 Custom standard spaces
 """"""""""""""""""""""
-
 Although the functionality is not available yet, the interface of the
 ``--output-spaces`` permits providing paths to custom templates that
 follow TemplateFlow's naming conventions
@@ -87,7 +83,6 @@ Although a more comprehensive coverage of standard files would be advised.
 
 Nonstandard spaces
 """"""""""""""""""
-
 Additionally, ``--output-spaces`` accepts identifiers of spatial references
 that do not generate *standardized* coordinate spaces:
 
@@ -109,7 +104,6 @@ Modifiers are not allowed when providing nonstandard spaces.
 
 Preprocessing blocks depending on standard templates
 """"""""""""""""""""""""""""""""""""""""""""""""""""
-
 Some modules of the pipeline (e.g., the ICA-AROMA denoising, the generation of
 HCP compatible *grayordinates* files, or the *fieldmap-less* distortion correction)
 operate in specific template spaces.

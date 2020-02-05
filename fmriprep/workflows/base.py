@@ -538,7 +538,7 @@ It is released under the [CC0]\
 
     summary = pe.Node(SubjectSummary(
         std_spaces=spaces.get_std_spaces(),
-        nstd_spaces=spaces.get_nonstd_spaces(only_names=True)),
+        nstd_spaces=spaces.get_nonstd_spaces()),
         name='summary', run_without_submitting=True)
 
     about = pe.Node(AboutSummary(version=__version__,

@@ -337,7 +337,7 @@ preprocessed BOLD runs*: {tpl}.
     mask_merge_tfms = pe.Node(niu.Merge(2), name='mask_merge_tfms', run_without_submitting=True,
                               mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    nxforms = [3, 4][use_fieldwarp]
+    nxforms = 3 + use_fieldwarp
     merge_xforms = pe.Node(niu.Merge(nxforms), name='merge_xforms',
                            run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
     workflow.connect([(inputnode, merge_xforms, [('hmc_xforms', 'in%d' % nxforms)])])
@@ -702,8 +702,7 @@ generated using the highest-resolution ``fsaverage`` as intermediate standardize
 surface space.
 """.format(density=grayord_density)
 
-    fslr_density = ('59k', '32k')[grayord_density == '91k']
-    mni_density = '32'[grayord_density == '91k']
+    fslr_density, mni_density = ('32k', '2') if grayord_density == '91k' else ('59k', '1')
 
     inputnode = pe.Node(niu.IdentityInterface(fields=[
         'bold_std',

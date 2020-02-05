@@ -10,7 +10,6 @@ Orchestrating the BOLD-preprocessing workflow
 """
 
 import os
-# from collections import OrderedDict
 
 import nibabel as nb
 from nipype import logging
@@ -710,7 +709,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
 
         if 'syn' in fmaps:
             sdc_select_std = pe.Node(
-                KeySelect(fields=['std2anat_xfm'], no_hash=True),
+                KeySelect(fields=['std2anat_xfm']),
                 name='sdc_select_std', run_without_submitting=True)
             sdc_select_std.inputs.key = 'MNI152NLin2009cAsym'
             workflow.connect([

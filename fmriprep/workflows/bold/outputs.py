@@ -181,7 +181,7 @@ def init_func_derivatives_wf(
                                        ('nonaggr_denoised_file', 'in_file')]),
         ])
 
-    if not hasattr(spaces, 'snapshot'):  # For documentation building purposes
+    if getattr(spaces, '_cached') is None:
         return workflow
 
     # Store resamplings in standard spaces when listed in --output-spaces

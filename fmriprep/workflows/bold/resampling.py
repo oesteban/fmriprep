@@ -27,10 +27,10 @@ from niworkflows.interfaces.utils import GenerateSamplingReference
 from niworkflows.interfaces.utility import KeySelect
 from niworkflows.interfaces.surf import GiftiSetAnatomicalStructure
 from niworkflows.interfaces.nilearn import Merge
+from niworkflows.utils.spaces import format_reference
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
-from niworkflows.utils.spaces import format_reference
 
 from .util import init_bold_reference_wf
 
@@ -213,17 +213,15 @@ def init_bold_std_trans_wf(
         Size of BOLD file in GB
     omp_nthreads : int
         Maximum number of threads an individual process may use
-    spaces : py:class:`~niworkflows.utils.spaces.SpatialReferences`
+    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
         A container for storing, organizing, and parsing spatial normalizations. Composed of
         :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
-        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
-        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
-        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
-        or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        A ``Reference`` may also contain a spec, which is a dictionary with template
-        specifications (e.g., the specs for the template ``MNI152Lin`` could be
-        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
-        version of the selected template).
+        Each ``Reference`` contains a space, which is a string of either TemplateFlow template IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNIPediatricAsym``), nonstandard references
+        (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.), or a custom template located in
+        the TemplateFlow root directory. Each ``Reference`` may also contain a spec, which is a
+        dictionary with template specifications (e.g., a specification of ``{'resolution': 2}``
+        would lead to resampling on a 2mm resolution of the space).
     name : str
         Name of workflow (default: ``bold_std_trans_wf``)
     use_compression : bool

@@ -191,14 +191,12 @@ def init_fmriprep_wf(
     spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
         A container for storing, organizing, and parsing spatial normalizations. Composed of
         :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
-        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
-        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
-        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
-        or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        A ``Reference`` may also contain a spec, which is a dictionary with template
-        specifications (e.g., the specs for the template ``MNI152Lin`` could be
-        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
-        version of the selected template).
+        Each ``Reference`` contains a space, which is a string of either TemplateFlow template IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNIPediatricAsym``), nonstandard references
+        (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.), or a custom template located in
+        the TemplateFlow root directory. Each ``Reference`` may also contain a spec, which is a
+        dictionary with template specifications (e.g., a specification of ``{'resolution': 2}``
+        would lead to resampling on a 2mm resolution of the space).
     subject_list : list
         List of subject labels
     t2s_coreg : bool
@@ -449,14 +447,12 @@ def init_single_subject_wf(
     spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
         A container for storing, organizing, and parsing spatial normalizations. Composed of
         :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
-        Each ``Reference`` contains a name, which is a string of either TemplateFlow IDs
-        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNI152NLin2009cAsym``, or ``fsLR``),
-        nonstandard references (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.),
-        or paths pointing to custom templates organized in a TemplateFlow-like structure.
-        A ``Reference`` may also contain a spec, which is a dictionary with template
-        specifications (e.g., the specs for the template ``MNI152Lin`` could be
-        ``{'resolution': 2}`` if one wants the resampling to be done on the 2mm resolution
-        version of the selected template).
+        Each ``Reference`` contains a space, which is a string of either TemplateFlow template IDs
+        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNIPediatricAsym``), nonstandard references
+        (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.), or a custom template located in
+        the TemplateFlow root directory. Each ``Reference`` may also contain a spec, which is a
+        dictionary with template specifications (e.g., a specification of ``{'resolution': 2}``
+        would lead to resampling on a 2mm resolution of the space).
     task_id : str or None
         Task ID of BOLD series to preprocess, or ``None`` to preprocess all
     use_aroma : bool

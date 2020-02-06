@@ -265,9 +265,8 @@ def init_func_derivatives_wf(
         select_fs_surf = pe.Node(KeySelect(
             fields=['surfaces', 'surf_kwargs']), name='select_fs_surf',
             run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
-        select_fs_surf.iterables = [('key', [s.legacyname or s.space for s in fs_outputs])]
-        select_fs_surf.inputs.surf_kwargs = [{'space': s.legacyname or s.space}
-                                             for s in fs_outputs]
+        select_fs_surf.iterables = [('key', fs_outputs)]
+        select_fs_surf.inputs.surf_kwargs = [{'space': s} for s in fs_outputs]
 
         name_surfs = pe.MapNode(GiftiNameSource(
             pattern=r'(?P<LR>[lr])h.\w+',

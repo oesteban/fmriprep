@@ -500,7 +500,7 @@ Resampling BOLD runs onto standard spaces
     :graph2use: colored
     :simple_form: yes
 
-    from fmriprep.utils.spaces import SpatialReferences
+    from niworkflows.utils.spaces import SpatialReferences
     from fmriprep.workflows.bold import init_bold_std_trans_wf
     wf = init_bold_std_trans_wf(
         freesurfer=True,

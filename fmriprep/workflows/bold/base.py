@@ -738,7 +738,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                     syn_unwarp_report_wf.get_node(node).interface.out_path_base = 'fmriprep'
 
     # Map final BOLD mask into T1w space (if required)
-    nonstd_spaces = set(spaces.get_nonstd_spaces())
+    nonstd_spaces = set(spaces.get_nonstandard())
     if nonstd_spaces.intersection(('T1w', 'anat')):
         from niworkflows.interfaces.fixes import (
             FixHeaderApplyTransforms as ApplyTransforms
@@ -768,7 +768,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
                 ('outputnode.bold_mask', 'inputnode.bold_mask_native')]),
         ])
 
-    if spaces.get_std_spaces(dim=(3,)):
+    if spaces.get_spaces(nonstandard=False, dim=(3,)):
         # Apply transforms in 1 shot
         # Only use uncompressed output if AROMA is to be run
         bold_std_trans_wf = init_bold_std_trans_wf(

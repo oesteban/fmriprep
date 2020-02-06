@@ -11,7 +11,7 @@ from niworkflows.interfaces.utility import KeySelect
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
-from ...utils.spaces import format_space as _fmt_space
+from niworkflows.utils.spaces import format_reference as _fmt_space
 
 
 def init_func_derivatives_wf(
@@ -60,7 +60,7 @@ def init_func_derivatives_wf(
 
     """
     from smriprep.workflows.outputs import _bids_relative
-    nonstd_spaces = set(spaces.get_nonstd_spaces())
+    nonstd_spaces = set(spaces.get_nonstandard())
     workflow = Workflow(name=name)
 
     inputnode = pe.Node(niu.IdentityInterface(fields=[
@@ -187,13 +187,13 @@ def init_func_derivatives_wf(
         return workflow
 
     # Store resamplings in standard spaces when listed in --output-spaces
-    if spaces.snapshot:
+    if spaces.cached.references:
         itersource = pe.Node(niu.IdentityInterface(fields=['space_definition']),
                              name='itersource')
 
         itersource.iterables = (
             'space_definition',
-            [(s.fullname, s.spec) for s in spaces.snapshot if s.dim == 3 and s.standard]
+            [(s.fullname, s.spec) for s in spaces.cached.get_standard(dim=(3,))]
         )
 
         select_std = pe.Node(KeySelect(
@@ -260,13 +260,13 @@ def init_func_derivatives_wf(
                 (inputnode, ds_bold_aparc_std, [('source_file', 'source_file')])
             ])
 
-    fs_outputs = [s for s in spaces.snapshot if s.name in ('fsaverage', 'fsnative')]
+    fs_outputs = spaces.cached.get_fs_spaces()
     if freesurfer and fs_outputs:
         select_fs_surf = pe.Node(KeySelect(
             fields=['surfaces', 'surf_kwargs']), name='select_fs_surf',
             run_without_submitting=True, mem_gb=DEFAULT_MEMORY_MIN_GB)
-        select_fs_surf.iterables = [('key', [s.legacyname or s.name for s in fs_outputs])]
-        select_fs_surf.inputs.surf_kwargs = [{'space': s.legacyname or s.name}
+        select_fs_surf.iterables = [('key', [s.legacyname or s.space for s in fs_outputs])]
+        select_fs_surf.inputs.surf_kwargs = [{'space': s.legacyname or s.space}
                                              for s in fs_outputs]
 
         name_surfs = pe.MapNode(GiftiNameSource(

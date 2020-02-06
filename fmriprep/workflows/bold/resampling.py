@@ -30,7 +30,7 @@ from niworkflows.interfaces.nilearn import Merge
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
-from ...utils.spaces import format_space
+from niworkflows.utils.spaces import format_reference
 
 from .util import init_bold_reference_wf
 
@@ -279,11 +279,9 @@ def init_bold_std_trans_wf(
 
     """
     workflow = Workflow(name=name)
-    output_references = [s.fullname for s in spaces.snapshot if s.dim == 3 and s.standard]
-
-    std_spaces_set = {s for s in spaces.get_std_spaces(dim=(3,)) if s}
+    output_references = spaces.cached.get_spaces(nonstandard=False, dim=(3,))
     std_vol_references = [
-        (s.fullname, s.spec) for s in spaces.spaces if s.fullname in std_spaces_set
+        (s.fullname, s.spec) for s in spaces.references if s.standard and s.dim == 3
     ]
 
     if len(output_references) == 1:
@@ -402,7 +400,7 @@ preprocessed BOLD runs*: {tpl}.
     workflow.connect([
         # Connecting outputnode
         (iterablesource, poutputnode, [
-            (('std_target', format_space), 'spatial_reference')]),
+            (('std_target', format_reference), 'spatial_reference')]),
         (merge, poutputnode, [('out_file', 'bold_std')]),
         (gen_final_ref, poutputnode, [('outputnode.ref_image', 'bold_std_ref')]),
         (mask_std_tfm, poutputnode, [('output_image', 'bold_mask_std')]),

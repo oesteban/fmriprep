@@ -534,10 +534,9 @@ It is released under the [CC0]\
     bids_info = pe.Node(BIDSInfo(
         bids_dir=layout.root, bids_validate=False), name='bids_info')
 
-    summary = pe.Node(SubjectSummary(
-        std_spaces=spaces.get_std_spaces(),
-        nstd_spaces=spaces.get_nonstd_spaces()),
-        name='summary', run_without_submitting=True)
+    summary = pe.Node(SubjectSummary(std_spaces=spaces.get_spaces(nonstandard=False),
+                                     nstd_spaces=spaces.get_spaces(standard=False)),
+                      name='summary', run_without_submitting=True)
 
     about = pe.Node(AboutSummary(version=__version__,
                                  command=' '.join(sys.argv)),

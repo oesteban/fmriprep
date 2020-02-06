@@ -706,7 +706,7 @@ def parse_spaces(opts):
         spaces.add(('MNI152NLin6Asym', {'res': vol_res}))
 
     # These arguments implicitly signal expected output
-    if not spaces.spaces:
+    if not spaces.references:
         warnings.warn(
             "fMRIPrep will not generate preprocessed derivatives because "
             "none of `--output-spaces`, `--use-aroma`, or `--cifti-output` "
@@ -714,7 +714,7 @@ def parse_spaces(opts):
         )
 
     # Add the default standard space (required by several sub-workflows)
-    if "MNI152NLin2009cAsym" not in spaces.get_std_spaces(dim=(3,)):
+    if "MNI152NLin2009cAsym" not in spaces.get_spaces(nonstandard=False, dim=(3,)):
         spaces.add("MNI152NLin2009cAsym")
     return spaces
 

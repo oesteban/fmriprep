@@ -12,8 +12,6 @@ Orchestrating the BOLD-preprocessing workflow
 import os
 
 import nibabel as nb
-from nipype import logging
-
 from nipype.interfaces.fsl import Split as FSLSplit
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
@@ -23,7 +21,7 @@ from niworkflows.interfaces.utility import KeySelect
 from niworkflows.interfaces.utils import DictMerge
 from niworkflows.func.util import init_bold_reference_wf
 
-from ...config import DEFAULT_MEMORY_MIN_GB
+from ... import config
 from ...utils.meepi import combine_meepi_source
 
 from ...interfaces import DerivativesDataSink
@@ -43,38 +41,7 @@ from .resampling import (
 from .outputs import init_func_derivatives_wf
 
 
-LOGGER = logging.getLogger('nipype.workflow')
-
-
-def init_func_preproc_wf(
-    aroma_melodic_dim,
-    bold2t1w_dof,
-    bold_file,
-    cifti_output,
-    debug,
-    dummy_scans,
-    err_on_aroma_warn,
-    fmap_bspline,
-    fmap_demean,
-    force_syn,
-    freesurfer,
-    ignore,
-    low_mem,
-    medial_surface_nan,
-    omp_nthreads,
-    output_dir,
-    regressors_all_comps,
-    regressors_dvars_th,
-    regressors_fd_th,
-    reportlets_dir,
-    spaces,
-    t2s_coreg,
-    use_aroma,
-    use_bbr,
-    use_syn,
-    layout=None,
-    num_bold=1,
-):
+def init_func_preproc_wf(bold_file):
     """
     This workflow controls the functional preprocessing stages of *fMRIPrep*.
 
@@ -87,111 +54,12 @@ def init_func_preproc_wf(
             from niworkflows.utils.spaces import SpatialReferences
             from fmriprep.workflows.bold import init_func_preproc_wf
             BIDSLayout = namedtuple('BIDSLayout', ['root'])
-            wf = init_func_preproc_wf(
-                aroma_melodic_dim=-200,
-                bold2t1w_dof=9,
-                bold_file='/completely/made/up/path/sub-01_task-nback_bold.nii.gz',
-                cifti_output=False,
-                debug=False,
-                dummy_scans=None,
-                err_on_aroma_warn=False,
-                fmap_bspline=True,
-                fmap_demean=True,
-                force_syn=True,
-                freesurfer=True,
-                ignore=[],
-                low_mem=False,
-                medial_surface_nan=False,
-                omp_nthreads=1,
-                output_dir='.',
-                regressors_all_comps=False,
-                regressors_dvars_th=1.5,
-                regressors_fd_th=0.5,
-                reportlets_dir='.',
-                spaces=SpatialReferences(
-                    spaces=['MNI152Lin',
-                            ('fsaverage', {'density': '10k'}),
-                            'T1w',
-                            'fsnative'],
-                    checkpoint=True),
-                t2s_coreg=False,
-                use_aroma=False,
-                use_bbr=True,
-                use_syn=True,
-                layout=BIDSLayout('.'),
-                num_bold=1,
-            )
+            wf = init_func_preproc_wf()
 
     Parameters
     ----------
-    aroma_melodic_dim : :obj:`int`
-        Maximum number of components identified by MELODIC within ICA-AROMA
-        (default is -200, ie. no limitation).
-    bold2t1w_dof : 6, 9 or 12
-        Degrees-of-freedom for BOLD-T1w registration
-    bold_file : :obj:`str`
+    bold_file
         BOLD series NIfTI file
-    cifti_output : :obj:`bool`
-        Generate bold CIFTI file in output spaces
-    debug : :obj:`bool`
-        Enable debugging outputs
-    dummy_scans : :obj:`int` or None
-        Number of volumes to consider as non steady state
-    err_on_aroma_warn : :obj:`bool`
-        Do not crash on ICA-AROMA errors
-    fmap_bspline : :obj:`bool`
-        **Experimental**: Fit B-Spline field using least-squares
-    fmap_demean : :obj:`bool`
-        Demean voxel-shift map during unwarp
-    force_syn : :obj:`bool`
-        **Temporary**: Always run SyN-based SDC
-    freesurfer : :obj:`bool`
-        Enable FreeSurfer functional registration (bbregister) and resampling
-        BOLD series to FreeSurfer surface meshes.
-    ignore : :obj:`list`
-        Preprocessing steps to skip (may include "slicetiming", "fieldmaps")
-    low_mem : :obj:`bool`
-        Write uncompressed .nii files in some cases to reduce memory usage
-    medial_surface_nan : :obj:`bool`
-        Replace medial wall values with NaNs on functional GIFTI files
-    omp_nthreads : :obj:`int`
-        Maximum number of threads an individual process may use
-    output_dir : :obj:`str`
-        Directory in which to save derivatives
-    regressors_all_comps : :obj:`bool`
-        Return all CompCor component time series instead of the top fraction
-    regressors_dvars_th : :obj:`float`
-        Criterion for flagging DVARS outliers
-    regressors_fd_th : :obj:`float`
-        Criterion for flagging framewise displacement outliers
-    reportlets_dir : :obj:`str`
-        Absolute path of a directory in which reportlets will be temporarily stored
-    spaces : :py:class:`~niworkflows.utils.spaces.SpatialReferences`
-        A container for storing, organizing, and parsing spatial normalizations. Composed of
-        :py:class:`~niworkflows.utils.spaces.Reference` objects representing spatial references.
-        Each ``Reference`` contains a space, which is a string of either TemplateFlow template IDs
-        (e.g., ``MNI152Lin``, ``MNI152NLin6Asym``, ``MNIPediatricAsym``), nonstandard references
-        (e.g., ``T1w`` or ``anat``, ``sbref``, ``run``, etc.), or a custom template located in
-        the TemplateFlow root directory. Each ``Reference`` may also contain a spec, which is a
-        dictionary with template specifications (e.g., a specification of ``{'resolution': 2}``
-        would lead to resampling on a 2mm resolution of the space).
-    t2s_coreg : :obj:`bool`
-        For multiecho EPI, use the calculated T2*-map for T2*-driven coregistration
-    use_aroma : :obj:`bool`
-        Perform ICA-AROMA on MNI-resampled functional series
-    use_bbr : :obj:`bool` or None
-        Enable/disable boundary-based registration refinement.
-        If ``None``, test BBR result for distortion before accepting.
-        When using ``t2s_coreg``, BBR will be enabled by default unless
-        explicitly specified otherwise.
-    use_syn : :obj:`bool`
-        **Experimental**: Enable ANTs SyN-based susceptibility distortion correction (SDC).
-        If fieldmaps are present and enabled, this is not run, by default.
-    layout : :py:class:`~bids.layout.BIDSLayout`
-        BIDSLayout structure to enable metadata retrieval
-    num_bold : :obj:`int`
-        Total number of BOLD files that have been set for preprocessing
-        (default is 1)
 
     Inputs
     ------
@@ -292,14 +160,16 @@ def init_func_preproc_wf(
         bold_tlen, mem_gb = _create_mem_gb(ref_file)
 
     wf_name = _get_wf_name(ref_file)
-    LOGGER.log(25, ('Creating bold processing workflow for "%s" (%.2f GB / %d TRs). '
-                    'Memory resampled/largemem=%.2f/%.2f GB.'),
-               ref_file, mem_gb['filesize'], bold_tlen, mem_gb['resampled'], mem_gb['largemem'])
+    config.loggers.workflow.log(
+        25, ('Creating bold processing workflow for "%s" (%.2f GB / %d TRs). '
+             'Memory resampled/largemem=%.2f/%.2f GB.'),
+        ref_file, mem_gb['filesize'], bold_tlen, mem_gb['resampled'], mem_gb['largemem'])
 
     sbref_file = None
     # For doc building purposes
     if not hasattr(layout, 'parse_file_entities'):
-        LOGGER.log(25, 'No valid layout: building empty workflow.')
+        config.loggers.workflow.log(
+            25, 'No valid layout: building empty workflow.')
         metadata = {
             'RepetitionTime': 2.0,
             'SliceTiming': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
@@ -327,21 +197,24 @@ def init_func_preproc_wf(
         files = layout.get(return_type='file', **entities)
         refbase = os.path.basename(ref_file)
         if 'sbref' in ignore:
-            LOGGER.info("Single-band reference files ignored.")
+            config.loggers.workflow.info("Single-band reference files ignored.")
         elif files and multiecho:
-            LOGGER.warning("Single-band reference found, but not supported in "
-                           "multi-echo workflows at this time. Ignoring.")
+            config.loggers.workflow.warning(
+                "Single-band reference found, but not supported in "
+                "multi-echo workflows at this time. Ignoring.")
         elif files:
             sbref_file = files[0]
             sbbase = os.path.basename(sbref_file)
             if len(files) > 1:
-                LOGGER.warning(
+                config.loggers.workflow.warning(
                     "Multiple single-band reference files found for {}; using "
                     "{}".format(refbase, sbbase))
             else:
-                LOGGER.log(25, "Using single-band reference file {}".format(sbbase))
+                config.loggers.workflow.log(
+                    25, "Using single-band reference file {}".format(sbbase))
         else:
-            LOGGER.log(25, "No single-band-reference found for {}".format(refbase))
+            config.loggers.workflow.log(
+                25, "No single-band-reference found for {}".format(refbase))
 
         metadata = layout.get_metadata(ref_file)
 
@@ -360,8 +233,9 @@ def init_func_preproc_wf(
 
     # Check if MEEPI for T2* coregistration target
     if t2s_coreg and not multiecho:
-        LOGGER.warning("No multiecho BOLD images found for T2* coregistration. "
-                       "Using standard EPI-T1 coregistration.")
+        config.loggers.workflow.warning(
+            "No multiecho BOLD images found for T2* coregistration. "
+            "Using standard EPI-T1 coregistration.")
         t2s_coreg = False
 
     # By default, force-bbr for t2s_coreg unless user specifies otherwise
@@ -422,7 +296,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
             registration_dof=bold2t1w_dof,
             pe_direction=metadata.get("PhaseEncodingDirection"),
             tr=metadata.get("RepetitionTime")),
-        name='summary', mem_gb=DEFAULT_MEMORY_MIN_GB, run_without_submitting=True)
+        name='summary', mem_gb=config.DEFAULT_MEMORY_MIN_GB, run_without_submitting=True)
     summary.inputs.dummy_scans = dummy_scans
 
     func_derivatives_wf = init_func_derivatives_wf(
@@ -920,11 +794,13 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
     # Freesurfer
     freesurfer_spaces = spaces.get_fs_spaces()
     if freesurfer and freesurfer_spaces:
-        LOGGER.log(25, 'Creating BOLD surface-sampling workflow.')
-        bold_surf_wf = init_bold_surf_wf(mem_gb=mem_gb['resampled'],
-                                         surface_spaces=freesurfer_spaces,
-                                         medial_surface_nan=medial_surface_nan,
-                                         name='bold_surf_wf')
+        config.loggers.workflow.log(
+            25, 'Creating BOLD surface-sampling workflow.')
+        bold_surf_wf = init_bold_surf_wf(
+            mem_gb=mem_gb['resampled'],
+            surface_spaces=freesurfer_spaces,
+            medial_surface_nan=medial_surface_nan,
+            name='bold_surf_wf')
         workflow.connect([
             (inputnode, bold_surf_wf, [
                 ('t1w_preproc', 'inputnode.t1w_preproc'),
@@ -966,13 +842,13 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
     ds_report_summary = pe.Node(
         DerivativesDataSink(desc='summary', keep_dtype=True),
         name='ds_report_summary', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        mem_gb=config.DEFAULT_MEMORY_MIN_GB)
 
     ds_report_validation = pe.Node(
         DerivativesDataSink(base_directory=reportlets_dir,
                             desc='validation', keep_dtype=True),
         name='ds_report_validation', run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB)
+        mem_gb=config.DEFAULT_MEMORY_MIN_GB)
 
     workflow.connect([
         (summary, ds_report_summary, [('out_report', 'in_file')]),

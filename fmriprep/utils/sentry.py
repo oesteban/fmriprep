@@ -7,6 +7,8 @@ import re
 from niworkflows.utils.misc import read_crashfile
 import sentry_sdk
 
+from .. import config
+
 CHUNK_SIZE = 16384
 # Group common events with pre specified fingerprints
 KNOWN_ERRORS = {
@@ -40,27 +42,18 @@ KNOWN_ERRORS = {
 }
 
 
-def start_ping(run_uuid, npart):
-    with sentry_sdk.configure_scope() as scope:
-        if run_uuid:
-            scope.set_tag('run_uuid', run_uuid)
-        scope.set_tag('npart', npart)
-    sentry_sdk.add_breadcrumb(message='fMRIPrep started', level='info')
-    sentry_sdk.capture_message('fMRIPrep started', level='info')
-
-
-def sentry_setup(opts, exec_env):
+def sentry_setup():
     from os import cpu_count
     import psutil
     import hashlib
-    from ..__about__ import __version__
 
+    exec_env = config.execution.exec_env
     environment = "prod"
-    release = __version__
-    if not __version__:
+    release = config.execution.version
+    if not release:
         environment = "dev"
         release = "dev"
-    elif int(os.getenv('FMRIPREP_DEV', '0')) or ('+' in __version__):
+    elif int(os.getenv('FMRIPREP_DEV', '0')) or ('+' in release):
         environment = "dev"
 
     sentry_sdk.init("https://d5a16b0c38d84d1584dfc93b9fb1ade6@sentry.io/1137693",
@@ -73,7 +66,7 @@ def sentry_setup(opts, exec_env):
         if exec_env == 'fmriprep-docker':
             scope.set_tag('docker_version', os.getenv('DOCKER_VERSION_8395080871'))
 
-        dset_desc_path = opts.bids_dir / 'dataset_description.json'
+        dset_desc_path = config.execution.bids_dir / 'dataset_description.json'
         if dset_desc_path.exists():
             desc_content = dset_desc_path.read_bytes()
             scope.set_tag('dset_desc_sha256', hashlib.sha256(desc_content).hexdigest())
@@ -104,7 +97,7 @@ def sentry_setup(opts, exec_env):
             scope.set_tag('overcommit_memory', 'n/a')
             scope.set_tag('overcommit_limit', 'n/a')
 
-        for k, v in vars(opts).items():
+        for k, v in config.get(flat=True).items():
             scope.set_tag(k, v)
 
 

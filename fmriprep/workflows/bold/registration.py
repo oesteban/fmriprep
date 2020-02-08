@@ -17,7 +17,6 @@ import os.path as op
 import pkg_resources as pkgr
 
 from nipype.pipeline import engine as pe
-from nipype import logging
 from nipype.interfaces import utility as niu, fsl, c3
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 # See https://github.com/poldracklab/fmriprep/issues/768
@@ -35,9 +34,10 @@ from niworkflows.interfaces.nilearn import Merge
 
 from ...config import DEFAULT_MEMORY_MIN_GB
 from ...interfaces import DerivativesDataSink
+from ... import config
 
 
-LOGGER = logging.getLogger('nipype.workflow')
+LOGGER = config.loggers.workflow
 
 
 def init_bold_reg_wf(freesurfer, use_bbr, bold2t1w_dof, mem_gb, omp_nthreads,

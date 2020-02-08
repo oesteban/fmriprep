@@ -7,7 +7,6 @@ Generate T2* map from multi-echo BOLD images
 .. autofunction:: init_bold_t2s_wf
 
 """
-from nipype import logging
 from nipype.pipeline import engine as pe
 from nipype.interfaces import utility as niu
 
@@ -15,8 +14,10 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.func.util import init_skullstrip_bold_wf
 
 from ...interfaces import T2SMap
+from ... import config
 
-LOGGER = logging.getLogger('nipype.workflow')
+
+LOGGER = config.loggers.workflow
 
 
 # pylint: disable=R0914

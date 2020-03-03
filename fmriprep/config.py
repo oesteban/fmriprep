@@ -1,15 +1,107 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""*fMRIPrep* settings."""
-import os
-import sys
-import logging
+r"""
+*fMRIPrep* settings.
+
+This module implements the memory structures to keep a consistent, singleton config.
+
+Example
+-------
+>>> from fmriprep import config
+>>> config_file = config.execution.work_dir / '.fmriprep.toml'
+>>> config.to_filename(config_file)
+>>> # Call build_workflow(config_file, retval) in a subprocess
+>>> with Manager() as mgr:
+>>>     from .workflow import build_workflow
+>>>     retval = mgr.dict()
+>>>     p = Process(target=build_workflow, args=(str(config_file), retval))
+>>>     p.start()
+>>>     p.join()
+>>> config.load(config_file)
+>>> # Access configs from any code section as:
+>>> value = config.section.setting
+
+The module also has a :py:func:`to_filename` function to allow writting out
+the settings to hard disk in *ToML* format, which looks like::
+
+    [nipype]
+    crashfile_format = "txt"
+    get_linked_libs = false
+    nprocs = 8
+    omp_nthreads = 8
+    plugin = "MultiProc"
+    resource_monitor = false
+    stop_on_first_crash = false
+    version = "1.5.0-dev+gdffcb7815"
+
+    [execution]
+    bids_dir = "/data/openfmri/ds000005"
+    boilerplate_only = false
+    exec_env = "posix"
+    fs_license_file = "/opt/freesurfer/license.txt"
+    fs_subjects_dir = "/data/openfmri/ds000005/derivatives/freesurfer-6.0.1"
+    log_dir = "/data/openfmri/ds000005/derivatives/fmriprep/logs"
+    log_level = 15
+    low_mem = false
+    md_only_boilerplate = false
+    notrack = true
+    output_dir = "/data/openfmri/ds000005/derivatives"
+    reports_only = false
+    run_uuid = "20200302-174345_9ba9f304-82de-4538-8c3a-570c5f5d8f2f"
+    participant_label = [ "01",]
+    version = "20.0.1+13.g3ca42930.dirty"
+    work_dir = "/home/oesteban/tmp/fmriprep-ds005/fprep-work2"
+    write_graph = false
+
+    [workflow]
+    anat_only = false
+    aroma_err_on_warn = false
+    aroma_melodic_dim = -200
+    bold2t1w_dof = 6
+    cifti_output = false
+    fmap_bspline = false
+    force_syn = false
+    hires = true
+    ignore = []
+    internal_spaces = "MNI152NLin2009cAsym"
+    longitudinal = false
+    medial_surface_nan = false
+    run_reconall = true
+    skull_strip_fixed_seed = false
+    skull_strip_template = "OASIS30ANTs"
+    t2s_coreg = false
+    use_aroma = false
+
+    [nipype.plugin_args]
+    maxtasksperchild = 1
+    raise_insufficient = false
+
+This config file is used to pass the settings across processes,
+using the :py:func:`load` function.
+
+Other responsibilities of the config module:
+
+  * Switching Python's ``multiprocessing`` to *forkserver* mode.
+  * Set up new logger levels (25: IMPORTANT, and 15: VERBOSE).
+  * Set up a warnings filter as soon as possible.
+  * Initialize runtime descriptive settings (e.g., default FreeSurfer license,
+    execution environment, nipype and *fMRIPrep* versions, etc.).
+  * Automated I/O magic operations:
+
+    * :obj:`Path` \<-\> :obj:`str` \<-\> :obj:`Path`).
+    * :py:class:`~niworkflows.util.spaces.SpatialReferences` \<-\> :obj:`str` \<-\>
+      :py:class:`~niworkflows.util.spaces.SpatialReferences`
+    * :py:class:`~bids.layout.BIDSLayout` \<-\> :obj:`str` \<-\>
+      :py:class:`~bids.layout.BIDSLayout`
+
+"""
 import warnings
 from multiprocessing import set_start_method
 
 
 def redirect_warnings(message, category, filename, lineno, file=None, line=None):
     """Redirect other warnings."""
+    import logging
     logger = logging.getLogger()
     logger.debug('Captured warning (%s): %s', category, message)
 
@@ -23,12 +115,17 @@ except RuntimeError:
 finally:
     # Defer all custom import for after initializing the forkserver and
     # redirecting warnings
+    import os
+    import sys
+    import logging
+
     from uuid import uuid4
     from pathlib import Path
     from time import strftime
     from niworkflows.utils.spaces import SpatialReferences as _SRs, Reference as _Ref
     from nipype import logging as nlogging, __version__ as _nipype_ver
     from . import __version__
+
 
 logging.addLevelName(25, 'IMPORTANT')  # Add a new level between INFO and WARNING
 logging.addLevelName(15, 'VERBOSE')  # Add a new level between INFO and DEBUG
@@ -280,6 +377,7 @@ def load(filename):
         section.load(configs)
     set_logger_level()
     init_spaces()
+    init_layout()
 
 
 def get(flat=False):

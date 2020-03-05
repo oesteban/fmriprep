@@ -156,7 +156,7 @@ def init_func_preproc_wf(bold_file):
     layout = config.execution.layout
     omp_nthreads = config.nipype.omp_nthreads
     freesurfer = config.workflow.run_reconall
-    spaces = config.execution.output_spaces
+    spaces = config.workflow.spaces
 
     if multiecho:
         tes = [layout.get_metadata(echo)['EchoTime'] for echo in bold_file]
@@ -280,7 +280,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
         cifti_output=config.workflow.cifti_output,
         freesurfer=freesurfer,
         metadata=metadata,
-        output_dir=config.execution.output_dir,
+        output_dir=str(config.execution.output_dir),
         spaces=spaces,
         use_aroma=config.workflow.use_aroma,
     )
@@ -326,7 +326,7 @@ Non-gridded (surface) resamplings were performed using `mri_vol2surf`
     # calculate BOLD registration to T1w
     bold_reg_wf = init_bold_reg_wf(name='bold_reg_wf',
                                    freesurfer=freesurfer,
-                                   use_bbr=use_bbr,
+                                   use_bbr=config.workflow.use_bbr,
                                    bold2t1w_dof=config.workflow.bold2t1w_dof,
                                    mem_gb=mem_gb['resampled'],
                                    omp_nthreads=omp_nthreads,

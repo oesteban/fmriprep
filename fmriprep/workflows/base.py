@@ -124,18 +124,11 @@ def init_single_subject_wf(subject_id):
 
     """
     name = "single_subject_%s_wf" % subject_id
-    if name in ('single_subject_wf', 'single_subject_fmripreptest_wf'):
-        # for documentation purposes
-        subject_data = {
-            't1w': ['/completely/made/up/path/sub-01_T1w.nii.gz'],
-            'bold': ['/completely/made/up/path/sub-01_task-nback_bold.nii.gz']
-        }
-    else:
-        subject_data = collect_data(
-            config.execution.layout,
-            subject_id,
-            config.execution.task_id,
-            config.execution.echo_idx)[0]
+    subject_data = collect_data(
+        config.execution.layout,
+        subject_id,
+        config.execution.task_id,
+        config.execution.echo_idx)[0]
 
     anat_only = config.workflow.anat_only
     # Make sure we always go through these two checks
@@ -260,6 +253,16 @@ It is released under the [CC0]\
 
     if anat_only:
         return workflow
+
+    # Append the functional section to the existing anatomical exerpt
+    # That way we do not need to stream down the number of bold datasets
+    anat_preproc_wf.__postdesc__ = (anat_preproc_wf.__postdesc__ or '') + """
+
+Functional data preprocessing
+
+: For each of the {num_bold} BOLD runs found per subject (across all
+tasks and sessions), the following preprocessing was performed.
+""".format(num_bold=len(subject_data['bold']))
 
     for bold_file in subject_data['bold']:
         func_preproc_wf = init_func_preproc_wf(bold_file)

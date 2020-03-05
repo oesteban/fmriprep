@@ -106,7 +106,14 @@ def redirect_warnings(message, category, filename, lineno, file=None, line=None)
     logger.debug('Captured warning (%s): %s', category, message)
 
 
+# cmp is not used by fmriprep, so ignore nipype-generated warnings
+warnings.filterwarnings('ignore', r'cmp not installed')
+warnings.filterwarnings('ignore', r'This has not been fully tested. Please report any failures.')
+warnings.filterwarnings('ignore', r"can't resolve package from __spec__ or __package__")
+warnings.simplefilter('ignore', DeprecationWarning)
+warnings.simplefilter('ignore', ResourceWarning)
 warnings.showwarning = redirect_warnings
+
 
 try:
     set_start_method('forkserver')

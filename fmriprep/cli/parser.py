@@ -266,7 +266,7 @@ https://fmriprep.readthedocs.io/en/%s/spaces.html""" % (currentv.base_version
 
     latest = check_latest()
     if latest is not None and currentv < latest:
-        parser.warning("""\
+        config.loggers.cli.warning("""\
 You are using fMRIPrep-%s, and a newer version of fMRIPrep is available: %s.
 Please check out our documentation about how and when to upgrade:
 https://fmriprep.readthedocs.io/en/latest/faq.html#upgrading""" % (
@@ -275,7 +275,7 @@ https://fmriprep.readthedocs.io/en/latest/faq.html#upgrading""" % (
     _blist = is_flagged()
     if _blist[0]:
         _reason = _blist[1] or 'unknown'
-        parser.warning("""\
+        config.loggers.cli.warning("""\
 WARNING: Version %s of fMRIPrep (current) has been FLAGGED
 (reason: %s).
 That means some severe flaw was found in it and we strongly
@@ -303,7 +303,7 @@ ERROR: a valid license file is required for FreeSurfer to run. fMRIPrep looked f
 license file at several paths, in this order: 1) command line argument ``--fs-license-file``; \
 2) ``$FS_LICENSE`` environment variable; and 3) the ``$FREESURFER_HOME/license.txt`` path. Get it \
 (for free) by registering at https://surfer.nmr.mgh.harvard.edu/registration.html""")
-    os.environ['FS_LICENSE'] = config.execution.fs_license_file
+    os.environ['FS_LICENSE'] = str(config.execution.fs_license_file)
 
     # Load base plugin_settings from file if --use-plugin
     if opts.use_plugin is not None:
@@ -343,14 +343,14 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
 
     # Ensure input and output folders are not the same
     if output_dir == bids_dir:
-        parser.error(
+        config.loggers.cli.error(
             'The selected output folder is the same as the input BIDS folder. '
             'Please modify the output path (suggestion: %s).'
             % bids_dir / 'derivatives' / ('fmriprep-%s' % version.split('+')[0])
         )
 
     if bids_dir in work_dir.parents:
-        parser.error(
+        config.loggers.cli.error(
             'The selected working directory is a subdirectory of the input BIDS folder. '
             'Please modify the output path.'
         )
@@ -376,7 +376,7 @@ license file at several paths, in this order: 1) command line argument ``--fs-li
     participant_label = set(config.execution.participant_label)
     missing_subjects = participant_label - set(config.execution.layout.get_subjects())
     if missing_subjects:
-        parser.error(
+        config.loggers.cli.error(
             "One or more participant labels were not found in the BIDS directory: "
             "%s." % ", ".join(missing_subjects))
 

@@ -52,8 +52,8 @@ def init_func_preproc_wf(bold_file):
 
             from fmriprep.workflows.tests import mock_config
             from fmriprep.workflows.bold.base import init_func_preproc_wf
-            mock_config()
-            wf = init_func_preproc_wf('sub-01_task-mixedgamblestask_run-01_bold.nii.gz')
+            bold = mock_config(return_bold=True)
+            wf = init_func_preproc_wf(bold)
 
     Parameters
     ----------

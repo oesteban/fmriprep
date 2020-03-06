@@ -110,7 +110,7 @@ def init_single_subject_wf(subject_id):
             from fmriprep.workflows.tests import mock_config
             from fmriprep.workflows.base import init_single_subject_wf
             mock_config()
-            wf = init_single_subject_wf('test')
+            wf = init_single_subject_wf('01')
 
     Parameters
     ----------

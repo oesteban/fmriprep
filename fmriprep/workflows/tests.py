@@ -5,7 +5,7 @@ from toml import loads
 from tempfile import mkdtemp
 
 
-def mock_config():
+def mock_config(return_bold=False):
     """Create a mock config for documentation and testing purposes."""
     from .. import config
     filename = Path(pkgrf('fmriprep', 'data/tests/config.toml'))
@@ -20,3 +20,6 @@ def mock_config():
     config.execution.work_dir = Path(mkdtemp())
     config.execution.bids_dir = Path(pkgrf('fmriprep', 'data/tests/ds000005'))
     config.init_layout()
+
+    if return_bold:
+        return config.execution.layout.get(suffix='bold', return_type='file')[0]

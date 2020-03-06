@@ -31,7 +31,7 @@ Example: ::
 Command-Line Arguments
 ----------------------
 .. argparse::
-   :ref: fmriprep.cli.run.get_parser
+   :ref: fmriprep.cli.parser._build_parser
    :prog: fmriprep
    :nodefault:
    :nodefaultconst:

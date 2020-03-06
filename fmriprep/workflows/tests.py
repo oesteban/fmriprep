@@ -1,4 +1,5 @@
 """Utilities and mocks for testing and documentation building."""
+import os
 from pathlib import Path
 from pkg_resources import resource_filename as pkgrf
 from toml import loads
@@ -8,6 +9,7 @@ from tempfile import mkdtemp
 def mock_config(return_bold=False):
     """Create a mock config for documentation and testing purposes."""
     from .. import config
+    os.environ["FREESURFER_HOME"] = os.getcwd()
     filename = Path(pkgrf('fmriprep', 'data/tests/config.toml'))
     settings = loads(filename.read_text())
     for sectionname, configs in settings.items():
